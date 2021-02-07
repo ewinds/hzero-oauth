@@ -1,14 +1,15 @@
 package org.hzero.oauth.security.token;
 
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,7 +23,7 @@ import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 import org.hzero.oauth.domain.vo.AuthenticationResult;
-import org.hzero.oauth.security.custom.processor.authorize.AuthorizeSuccessProcessor;
+import org.hzero.oauth.security.event.AuthorizeEvent;
 import org.hzero.oauth.security.exception.CustomAuthenticationException;
 import org.hzero.oauth.security.util.LoginUtil;
 
@@ -31,7 +32,7 @@ import org.hzero.oauth.security.util.LoginUtil;
  *
  * @author bojiangzhou 2019/06/02
  */
-public abstract class LoginTokenService implements InitializingBean {
+public abstract class LoginTokenService implements InitializingBean, ApplicationContextAware {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LoginTokenService.class);
 
@@ -48,7 +49,7 @@ public abstract class LoginTokenService implements InitializingBean {
 
     private AuthenticationProvider authenticationProvider;
 
-    private List<AuthorizeSuccessProcessor> authorizeSuccessProcessors;
+    private ApplicationContext applicationContext;
 
     public LoginTokenService() {
     }
@@ -56,14 +57,11 @@ public abstract class LoginTokenService implements InitializingBean {
     public LoginTokenService(TokenGranter tokenGranter,
                              ClientDetailsService clientDetailsService,
                              OAuth2RequestFactory oAuth2RequestFactory,
-                             AuthenticationProvider authenticationProvider,
-                             List<AuthorizeSuccessProcessor> authorizeSuccessProcessors) {
+                             AuthenticationProvider authenticationProvider) {
         this.tokenGranter = tokenGranter;
         this.clientDetailsService = clientDetailsService;
         this.oAuth2RequestFactory = oAuth2RequestFactory;
         this.authenticationProvider = authenticationProvider;
-        this.authorizeSuccessProcessors = authorizeSuccessProcessors;
-        this.authorizeSuccessProcessors.sort(Comparator.comparingInt(AuthorizeSuccessProcessor::getOrder));
     }
 
     @Override
@@ -150,14 +148,8 @@ public abstract class LoginTokenService implements InitializingBean {
             throw new UnsupportedGrantTypeException("Unsupported grant type: " + tokenRequest.getGrantType());
         }
 
-        for (AuthorizeSuccessProcessor processor : authorizeSuccessProcessors) {
-            try {
-                processor.process(request, null, authorizationRequest, token);
-            } catch (Exception e) {
-                LOGGER.error("authorize processor error, processor is {}, ex={}",
-                        processor.getClass().getSimpleName(), e.getMessage(), e);
-            }
-        }
+        AuthorizeEvent authorizeEvent = new AuthorizeEvent(request, authorizationRequest, token);
+        applicationContext.publishEvent(authorizeEvent);
 
         return token;
     }
@@ -196,5 +188,10 @@ public abstract class LoginTokenService implements InitializingBean {
 
     public void setAuthenticationProvider(AuthenticationProvider authenticationProvider) {
         this.authenticationProvider = authenticationProvider;
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = applicationContext;
     }
 }

@@ -24,7 +24,9 @@ import org.hzero.oauth.security.constant.LoginType;
 import org.hzero.oauth.security.constant.SecurityAttributes;
 import org.hzero.oauth.security.exception.CustomAuthenticationException;
 import org.hzero.oauth.security.exception.LoginExceptions;
+import org.hzero.oauth.security.secheck.SecCheckVO;
 import org.hzero.oauth.security.service.LoginRecordService;
+import org.hzero.oauth.security.util.LoginUtil;
 import org.hzero.oauth.security.util.RequestUtil;
 
 /**
@@ -72,11 +74,19 @@ public class CustomAuthenticationFailureHandler implements AuthenticationFailure
             loginUser.setLoginName(username);
         }
 
+        // 跳转到二次校验页面， 该判断逻辑必须放在异常最前面，因为当遇到其他任何登录失败的情况，会清理session属性SEC_CHECK_KEY
+        if (StringUtils.equals(exception.getMessage(), LoginExceptions.SECONDARY_CHECK.value())) {
+            // 跳转到二次校验页面
+            redirectStrategy.sendRedirect(request, response, this.getSecondaryCheckPage(request));
+            return;
+        } else {
+            session.removeAttribute(SecCheckVO.SEC_CHECK_KEY);
+        }
+
         LOGGER.debug("user login failed, username={}, exMsg={}", username, exception.getMessage());
 
         String message = getExceptionMessage(session, exception);
         session.setAttribute(SecurityAttributes.SECURITY_LAST_EXCEPTION, message);
-
         // 捕获异常，异步记录登录失败日志
         auditLoginService.addLogFailureRecord(request, loginUser, message);
 
@@ -93,16 +103,33 @@ public class CustomAuthenticationFailureHandler implements AuthenticationFailure
 
 
         // 跳转到登录页面
-        String URL = securityProperties.getLogin().getAbsoluteLoginPage();
+        String URL = RequestUtil.getBaseURL(request) + securityProperties.getLogin().getPage();
         redirectStrategy.sendRedirect(request, response, URL + "?type=" + LoginType.ACCOUNT.code());
     }
 
     protected String getExpirePage(HttpServletRequest request) {
-        return securityProperties.getBaseUrl() + securityProperties.getLogin().getPassExpiredPage();
+        return RequestUtil.getBaseURL(request) + securityProperties.getLogin().getPassExpiredPage();
     }
 
+    /**
+     * 获取强制修改密码的页面路径
+     *
+     * @param request 请求对象
+     * @return 强制修改密码页面路径
+     */
     protected String getForceModifyPage(HttpServletRequest request) {
-        return securityProperties.getBaseUrl() + securityProperties.getLogin().getPassForceModifyPage();
+        return RequestUtil.getBaseURL(request) + securityProperties.getLogin().getPassForceModifyPage();
+    }
+
+    /**
+     * 获取二次校验页面路径
+     *
+     * @param request 请求对象
+     * @return 二次校验页面路径
+     */
+    protected String getSecondaryCheckPage(HttpServletRequest request) {
+        // 请求路径
+        return RequestUtil.getBaseURL(request) + securityProperties.getLogin().getPassSecondaryCheckPage();
     }
 
     private String getExceptionMessage(HttpSession session, AuthenticationException exception) {
@@ -121,7 +148,7 @@ public class CustomAuthenticationFailureHandler implements AuthenticationFailure
         if (langs.length > 1) {
             message = MessageAccessor.getMessage(exception.getMessage(), parameters, new Locale(langs[0], langs[1])).desc();
         } else {
-            message = MessageAccessor.getMessage(exception.getMessage(), parameters).desc();
+            message = MessageAccessor.getMessage(exception.getMessage(), parameters, LoginUtil.getLanguageLocale()).desc();
         }
 
         return message;

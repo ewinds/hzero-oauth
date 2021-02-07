@@ -21,11 +21,12 @@ import org.hzero.oauth.security.constant.LoginType;
 import org.hzero.oauth.security.constant.SecurityAttributes;
 import org.hzero.oauth.security.exception.CustomAuthenticationException;
 import org.hzero.oauth.security.service.LoginRecordService;
+import org.hzero.oauth.security.util.LoginUtil;
 import org.hzero.oauth.security.util.RequestUtil;
 
 /**
  * 登录失败处理器
- * 
+ *
  * @author bojiangzhou 2019/02/25
  */
 public class SmsAuthenticationFailureHandler implements AuthenticationFailureHandler {
@@ -50,7 +51,7 @@ public class SmsAuthenticationFailureHandler implements AuthenticationFailureHan
 
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
-                    AuthenticationException exception) throws IOException, ServletException {
+                                        AuthenticationException exception) throws IOException, ServletException {
         String mobile = request.getParameter(mobileParameter);
         String message = exception.getMessage();
 
@@ -76,10 +77,10 @@ public class SmsAuthenticationFailureHandler implements AuthenticationFailureHan
 
         // 捕获异常，异步记录登录失败日志
         auditLoginService.addLogFailureRecord(request, loginUser,
-                MessageAccessor.getMessage(exception.getMessage(), parameters).desc());
-        session.setAttribute(SecurityAttributes.SECURITY_LAST_EXCEPTION, MessageAccessor.getMessage(exception.getMessage(), parameters).desc());
+                MessageAccessor.getMessage(exception.getMessage(), parameters, LoginUtil.getLanguageLocale()).desc());
+        session.setAttribute(SecurityAttributes.SECURITY_LAST_EXCEPTION, MessageAccessor.getMessage(exception.getMessage(), parameters, LoginUtil.getLanguageLocale()).desc());
 
-        String URL = RequestUtil.getOauthRootURL(request) + securityProperties.getLogin().getPage();
+        String URL = RequestUtil.getBaseURL(request) + securityProperties.getLogin().getPage();
         redirectStrategy.sendRedirect(request, response, URL + "?type=" + LoginType.SMS.code() + "&" + SecurityAttributes.SECURITY_LOGIN_USERNAME + "=" + mobile);
     }
 }

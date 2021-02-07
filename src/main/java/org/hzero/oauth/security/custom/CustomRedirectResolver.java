@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.common.exceptions.RedirectMismatchExc
 import org.springframework.security.oauth2.provider.ClientDetails;
 import org.springframework.security.oauth2.provider.endpoint.RedirectResolver;
 import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 /**
@@ -27,6 +28,8 @@ public class CustomRedirectResolver implements RedirectResolver {
 
     private boolean matchPorts = true;
 
+    private boolean checkRedirectUriMatch = true;
+
     public void setMatchSubdomains(boolean matchSubdomains) {
         this.matchSubdomains = matchSubdomains;
     }
@@ -37,6 +40,10 @@ public class CustomRedirectResolver implements RedirectResolver {
 
     public void setRedirectGrantTypes(Collection<String> redirectGrantTypes) {
         this.redirectGrantTypes = new HashSet<>(redirectGrantTypes);
+    }
+
+    public void setCheckRedirectUriMatch(boolean checkRedirectUriMatch) {
+        this.checkRedirectUriMatch = checkRedirectUriMatch;
     }
 
     @Override
@@ -53,14 +60,23 @@ public class CustomRedirectResolver implements RedirectResolver {
 
         Set<String> redirectUris = client.getRegisteredRedirectUri();
 
-        if (redirectUris != null && !redirectUris.isEmpty()) {
-            return obtainMatchingRedirect(redirectUris, requestedRedirect);
-        } else if (StringUtils.hasText(requestedRedirect)) {
-            return requestedRedirect;
+        if (CollectionUtils.isEmpty(redirectUris)) {
+            if (requestedRedirect == null) {
+                throw new InvalidRequestException("A redirect_uri must be supplied.");
+            } else {
+                return requestedRedirect;
+            }
         } else {
-            throw new InvalidRequestException("A redirect_uri must be supplied.");
+            if (checkRedirectUriMatch) {
+                return obtainMatchingRedirect(redirectUris, requestedRedirect);
+            } else {
+                if (requestedRedirect == null) {
+                    return redirectUris.iterator().next();
+                } else {
+                    return requestedRedirect;
+                }
+            }
         }
-
     }
 
     /**

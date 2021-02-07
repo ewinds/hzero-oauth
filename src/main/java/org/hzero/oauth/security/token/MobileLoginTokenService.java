@@ -1,6 +1,5 @@
 package org.hzero.oauth.security.token;
 
-import java.util.List;
 import javax.servlet.http.HttpServletRequest;
 
 import org.apache.commons.lang3.StringUtils;
@@ -11,7 +10,6 @@ import org.springframework.security.oauth2.provider.OAuth2RequestFactory;
 import org.springframework.security.oauth2.provider.TokenGranter;
 
 import org.hzero.oauth.security.config.SecurityProperties;
-import org.hzero.oauth.security.custom.processor.authorize.AuthorizeSuccessProcessor;
 import org.hzero.oauth.security.sms.SmsAuthenticationDetailsSource;
 import org.hzero.oauth.security.sms.SmsAuthenticationToken;
 
@@ -21,17 +19,16 @@ import org.hzero.oauth.security.sms.SmsAuthenticationToken;
  */
 public class MobileLoginTokenService extends LoginTokenService {
 
-    private SmsAuthenticationDetailsSource authenticationDetailsSource;
-    private SecurityProperties securityProperties;
+    private final SmsAuthenticationDetailsSource authenticationDetailsSource;
+    private final SecurityProperties securityProperties;
 
     public MobileLoginTokenService(TokenGranter tokenGranter,
                                    ClientDetailsService clientDetailsService,
                                    OAuth2RequestFactory oAuth2RequestFactory,
                                    AuthenticationProvider authenticationProvider,
                                    SmsAuthenticationDetailsSource authenticationDetailsSource,
-                                   SecurityProperties securityProperties,
-                                   List<AuthorizeSuccessProcessor> authorizeSuccessProcessors) {
-        super(tokenGranter, clientDetailsService, oAuth2RequestFactory, authenticationProvider, authorizeSuccessProcessors);
+                                   SecurityProperties securityProperties) {
+        super(tokenGranter, clientDetailsService, oAuth2RequestFactory, authenticationProvider);
         this.authenticationDetailsSource = authenticationDetailsSource;
         this.securityProperties = securityProperties;
     }

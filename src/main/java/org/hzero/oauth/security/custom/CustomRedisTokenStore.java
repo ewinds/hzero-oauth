@@ -10,9 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.security.oauth2.common.ExpiringOAuth2RefreshToken;
-import org.springframework.security.oauth2.common.OAuth2AccessToken;
-import org.springframework.security.oauth2.common.OAuth2RefreshToken;
+import org.springframework.security.oauth2.common.*;
 import org.springframework.security.oauth2.provider.OAuth2Authentication;
 import org.springframework.security.oauth2.provider.token.AuthenticationKeyGenerator;
 import org.springframework.security.oauth2.provider.token.DefaultAuthenticationKeyGenerator;
@@ -25,16 +23,17 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import org.hzero.autoconfigure.oauth.OauthAutoConfiguration;
 import org.hzero.oauth.security.util.LoginUtil;
 
 /**
- *
  * @author bojiangzhou
  * @author efenderbosch
  */
 public class CustomRedisTokenStore extends RedisTokenStore {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CustomRedisTokenStore.class);
+    private static final int MAX_INACTIVE_INTERVAL_IN_SECONDS = 600;
 
     private static final String ACCESS = "access:";
     private static final String AUTH_TO_ACCESS = "auth_to_access:";
@@ -57,15 +56,19 @@ public class CustomRedisTokenStore extends RedisTokenStore {
     private RedisTokenStoreSerializationStrategy serializationStrategy = new JdkSerializationStrategy();
     private LoginUtil loginUtil;
     private SessionRepository sessionRepository;
+    private boolean accessTokenAutoRenewal;
 
     private String prefix = "";
 
-    public CustomRedisTokenStore(RedisConnectionFactory connectionFactory, LoginUtil loginUtil,
-                                 SessionRepository sessionRepository) {
+    public CustomRedisTokenStore(RedisConnectionFactory connectionFactory,
+                                 LoginUtil loginUtil,
+                                 SessionRepository sessionRepository,
+                                 boolean accessTokenAutoRenewal) {
         super(connectionFactory);
         this.connectionFactory = connectionFactory;
         this.loginUtil = loginUtil;
         this.sessionRepository = sessionRepository;
+        this.accessTokenAutoRenewal = accessTokenAutoRenewal;
     }
 
     @Override
@@ -128,7 +131,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         }
         OAuth2AccessToken accessToken = deserializeAccessToken(bytes);
         if (accessToken != null && !key
-                        .equals(authenticationKeyGenerator.extractKey(readAuthentication(accessToken.getValue())))) {
+                .equals(authenticationKeyGenerator.extractKey(readAuthentication(accessToken.getValue())))) {
             // Keep the stores consistent (maybe the same user is
             // represented by this authentication but the details have
             // changed)
@@ -169,6 +172,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
 
     /**
      * 判断踢下线的 access_token 是否存在
+     *
      * @param token access_token
      * @return exists
      */
@@ -178,7 +182,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         Boolean exists = null;
         try {
             exists = conn.exists(accessKey);
-        } catch (UnsupportedOperationException e){
+        } catch (UnsupportedOperationException e) {
             LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
         } finally {
             conn.close();
@@ -188,6 +192,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
 
     /**
      * 踢下线时保存移除的 access_token
+     *
      * @param token access_token
      */
     public void saveOfflineAccessToken(String token) {
@@ -197,7 +202,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         try {
             conn.set(accessKey, serializedAccessToken);
             conn.expire(accessKey, REMOVED_ACCESS_EXPIRED_SECONDS);
-        } catch (UnsupportedOperationException e){
+        } catch (UnsupportedOperationException e) {
             LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
         } finally {
             conn.close();
@@ -259,24 +264,24 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         // --------- 移动端和web端分开存储 ---------
         String uKey = UNAME_TO_ACCESS;
         String lKey = LNAME_TO_ACCESS;
-        if(loginUtil.isMobileDeviceLogin(authentication)){
+        if (loginUtil.isMobileDeviceLogin(authentication)) {
             uKey = UNAME_TO_ACCESS_APP;
             lKey = LNAME_TO_ACCESS_APP;
         }
 
         byte[] uKeyBytes = serializeKey(uKey + getApprovalKey(authentication));
         byte[] lKeyBytes = null;
-        if(authentication.getUserAuthentication() != null){
+        if (authentication.getUserAuthentication() != null) {
             lKeyBytes = serializeKey(lKey + authentication.getUserAuthentication().getName());
         }
 
-        byte[] clientId = serializeKey(CLIENT_ID_TO_ACCESS + authentication.getOAuth2Request().getClientId());
+        //byte[] clientId = serializeKey(CLIENT_ID_TO_ACCESS + authentication.getOAuth2Request().getClientId());
 
         RedisConnection conn = getConnection();
         try {
             try {
                 conn.openPipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
             conn.set(accessKey, serializedAccessToken);
@@ -286,23 +291,27 @@ public class CustomRedisTokenStore extends RedisTokenStore {
             if (!authentication.isClientOnly()) {
                 conn.rPush(uKeyBytes, serializedTokenValue);
             }
-            if(lKeyBytes != null){
+            if (lKeyBytes != null) {
                 conn.rPush(lKeyBytes, serializedTokenValue);
             }
-            if(serializedSessionId != null){
+            if (serializedSessionId != null) {
                 conn.set(accessSessionKey, serializedSessionId);
             }
-            conn.rPush(clientId, serializedAccessToken);
+            //conn.rPush(clientId, serializedAccessToken);
             if (token.getExpiration() != null) {
+                // 如果配置了自动下线 则过期时间为自动下线时间 否则取 token 过期时间
                 int seconds = token.getExpiresIn();
                 conn.expire(accessKey, seconds);
                 conn.expire(authKey, seconds);
                 conn.expire(authToAccessKey, seconds);
-                conn.expire(clientId, seconds);
+                //conn.expire(clientId, seconds);
                 conn.expire(uKeyBytes, seconds);
                 conn.expire(accessSessionKey, seconds);
-                if(lKeyBytes != null) {
+                if (lKeyBytes != null) {
                     conn.expire(lKeyBytes, seconds);
+                }
+                if (session != null && accessTokenAutoRenewal) {
+                    session.setMaxInactiveInterval(Math.min(OauthAutoConfiguration.MAX_INACTIVE_INTERVAL_IN_SECONDS, seconds));
                 }
             }
             OAuth2RefreshToken refreshToken = token.getRefreshToken();
@@ -318,7 +327,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
                     Date expiration = expiringRefreshToken.getExpiration();
                     if (expiration != null) {
                         int seconds = Long.valueOf((expiration.getTime() - System.currentTimeMillis()) / 1000L)
-                                        .intValue();
+                                .intValue();
                         conn.expire(refreshToAccessKey, seconds);
                         conn.expire(accessToRefreshKey, seconds);
                     }
@@ -326,7 +335,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
             }
             try {
                 conn.closePipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
         } finally {
@@ -334,9 +343,75 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         }
     }
 
+    public void renewalAccessToken(OAuth2AccessToken token, OAuth2Authentication authentication, int accessTokenValiditySeconds) {
+        // 未开启自动续期 并且 自动下线也未开启
+        if (!accessTokenAutoRenewal) {
+            return;
+        }
+        // 如果 refresh token 过期 则不允许续期
+        OAuth2RefreshToken refreshToken = token.getRefreshToken();
+        boolean refreshTokenExpired = refreshToken instanceof DefaultExpiringOAuth2RefreshToken
+                && isExpired(((DefaultExpiringOAuth2RefreshToken) refreshToken).getExpiration());
+        // 无操作下线时间 优先级大于 默认客户端超时时间(相当于一次 refresh token 操作)
+        long seconds = accessTokenValiditySeconds;
+        // 如果开启了无操作自动下线
+        if (seconds > 0) {
+            String uKey = UNAME_TO_ACCESS;
+            String lKey = LNAME_TO_ACCESS;
+            if (loginUtil.isMobileDeviceLogin(authentication)) {
+                uKey = UNAME_TO_ACCESS_APP;
+                lKey = LNAME_TO_ACCESS_APP;
+            }
+            // 重新保存 access_token
+            byte[] accessKey = serializeKey(ACCESS + token.getValue());
+            byte[] authKey = serializeKey(AUTH + token.getValue());
+            byte[] authToAccessKey = serializeKey(AUTH_TO_ACCESS + authenticationKeyGenerator.extractKey(authentication));
+            //byte[] clientId = serializeKey(CLIENT_ID_TO_ACCESS + authentication.getOAuth2Request().getClientId());
+            byte[] uKeyBytes = serializeKey(uKey + getApprovalKey(authentication));
+            byte[] accessSessionKey = serializeKey(ACCESS_TO_SESSION + token.getValue());
+            byte[] lKeyBytes = authentication.getUserAuthentication() == null ? null : serializeKey(lKey + authentication.getUserAuthentication().getName());
+            RedisConnection conn = getConnection();
+            try {
+                try {
+                    conn.openPipeline();
+                } catch (UnsupportedOperationException e) {
+                    LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
+                }
+                // 如果 refresh token 未过期 && 开启了 access token 续期 = 刷新 access token
+                if (!refreshTokenExpired && accessTokenAutoRenewal) {
+                    Date expireDate = new Date(System.currentTimeMillis() + (accessTokenValiditySeconds * 1000L));
+                    ((DefaultOAuth2AccessToken) token).setExpiration(expireDate);
+                    byte[] serializedAccessToken = serialize(token);
+                    conn.set(accessKey, serializedAccessToken);
+                    conn.set(authToAccessKey, serializedAccessToken);
+                }
+                conn.expire(accessKey, seconds);
+                conn.expire(authKey, seconds);
+                conn.expire(authToAccessKey, seconds);
+                //conn.expire(clientId, seconds);
+                conn.expire(uKeyBytes, seconds);
+                conn.expire(accessSessionKey, seconds);
+                if (lKeyBytes != null) {
+                    conn.expire(lKeyBytes, seconds);
+                }
+                try {
+                    conn.closePipeline();
+                } catch (UnsupportedOperationException e) {
+                    LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
+                }
+            } finally {
+                conn.close();
+            }
+        }
+    }
+
+    private boolean isExpired(Date expiration) {
+        return expiration != null && expiration.before(new Date());
+    }
+
     private static String getApprovalKey(OAuth2Authentication authentication) {
         String userName = authentication.getUserAuthentication() == null ? ""
-                        : authentication.getUserAuthentication().getName();
+                : authentication.getUserAuthentication().getName();
         return getApprovalKey(authentication.getOAuth2Request().getClientId(), userName);
     }
 
@@ -349,7 +424,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         removeAccessToken(accessToken.getValue());
     }
 
-    public void removeAccessTokenByLoginName(String clientId, String loginName){
+    public void removeAccessTokenByLoginName(String clientId, String loginName) {
         Assert.isTrue(StringUtils.isNotBlank(clientId), "clientId should not be null.");
         Assert.isTrue(StringUtils.isNotBlank(loginName), "loginName should not be null.");
         String sourceKey = UNAME_TO_ACCESS + getApprovalKey(clientId, loginName);
@@ -360,7 +435,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         removeAccessTokenBySourceKey(sourceKeyApp);
     }
 
-    public void removeAccessTokenByLoginName(String loginName){
+    public void removeAccessTokenByLoginName(String loginName) {
         Assert.isTrue(StringUtils.isNotBlank(loginName), "loginName should not be null.");
         String sourceKey = LNAME_TO_ACCESS + loginName;
         String sourceKeyApp = LNAME_TO_ACCESS_APP + loginName;
@@ -388,7 +463,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
             if (!CollectionUtils.isEmpty(bytes)) {
                 bytes.forEach(tokenBytes -> tokenValues.add(deserializeString(tokenBytes)));
             }
-        }finally {
+        } finally {
             conn.close();
         }
         return tokenValues;
@@ -399,22 +474,22 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         RedisConnection conn = getConnection();
         try {
             byte[] tokenBytes = null;
-            while((tokenBytes = conn.lPop(serializeKey(sourceKey))) != null){
+            while ((tokenBytes = conn.lPop(serializeKey(sourceKey))) != null) {
                 String token = deserializeString(tokenBytes);
                 removeAccessToken(token);
                 String refreshToken = getRefreshTokenByToken(conn, token);
                 removeRefreshToken(refreshToken);
             }
-        }finally {
+        } finally {
             conn.close();
         }
     }
 
     private String getRefreshTokenByToken(RedisConnection conn, String token) {
-        if(conn != null && !conn.isClosed()){
+        if (conn != null && !conn.isClosed()) {
             byte[] key = serializeKey(ACCESS_TO_REFRESH + token);
             return deserializeString(conn.get(key));
-        }else{
+        } else {
             throw new RuntimeException("RedisConnection is closed.");
         }
 
@@ -443,7 +518,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         try {
             try {
                 conn.openPipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
             byte[] access = conn.get(accessKey);
@@ -457,12 +532,12 @@ public class CustomRedisTokenStore extends RedisTokenStore {
             List<Object> results = null;
             try {
                 results = conn.closePipeline();
-                if(!CollectionUtils.isEmpty(results)){
+                if (!CollectionUtils.isEmpty(results)) {
                     access = (byte[]) results.get(0);
                     auth = (byte[]) results.get(1);
                     serializedSessionId = (byte[]) results.get(2);
                 }
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
 
@@ -479,31 +554,31 @@ public class CustomRedisTokenStore extends RedisTokenStore {
                 // ---------- 区分移动端和web端 -----------
                 String uKey = UNAME_TO_ACCESS;
                 String lKey = LNAME_TO_ACCESS;
-                if(loginUtil.isMobileDeviceLogin(authentication)){
+                if (loginUtil.isMobileDeviceLogin(authentication)) {
                     uKey = UNAME_TO_ACCESS_APP;
                     lKey = LNAME_TO_ACCESS_APP;
                 }
                 byte[] uKeyBytes = serializeKey(uKey + getApprovalKey(authentication));
                 byte[] lKeyBytes = null;
-                if(authentication.getUserAuthentication() != null) {
+                if (authentication.getUserAuthentication() != null) {
                     lKeyBytes = serializeKey(lKey + authentication.getUserAuthentication().getName());
                 }
-                byte[] clientId = serializeKey(CLIENT_ID_TO_ACCESS + authentication.getOAuth2Request().getClientId());
+                //byte[] clientId = serializeKey(CLIENT_ID_TO_ACCESS + authentication.getOAuth2Request().getClientId());
                 try {
                     conn.openPipeline();
-                }catch (UnsupportedOperationException e){
+                } catch (UnsupportedOperationException e) {
                     LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
                 }
                 conn.del(authToAccessKey);
                 conn.lRem(uKeyBytes, 1, tokenValue.getBytes(StandardCharsets.UTF_8));
-                if(lKeyBytes != null){
+                if (lKeyBytes != null) {
                     conn.lRem(lKeyBytes, 1, tokenValue.getBytes(StandardCharsets.UTF_8));
                 }
-                conn.lRem(clientId, 1, access);
+                //conn.lRem(clientId, 1, access);
                 conn.del(serialize(ACCESS + key));
                 try {
                     conn.closePipeline();
-                }catch (UnsupportedOperationException e){
+                } catch (UnsupportedOperationException e) {
                     LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
                 }
             }
@@ -521,7 +596,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         try {
             try {
                 conn.openPipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
             conn.set(refreshKey, serializedRefreshToken);
@@ -537,7 +612,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
             }
             try {
                 conn.closePipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
         } finally {
@@ -573,7 +648,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         try {
             try {
                 conn.openPipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
             conn.del(refreshKey);
@@ -582,7 +657,7 @@ public class CustomRedisTokenStore extends RedisTokenStore {
             conn.del(access2RefreshKey);
             try {
                 conn.closePipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
         } finally {
@@ -603,14 +678,14 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         try {
             try {
                 conn.openPipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
             bytes = conn.get(key);
             conn.del(key);
             try {
                 results = conn.closePipeline();
-            }catch (UnsupportedOperationException e){
+            } catch (UnsupportedOperationException e) {
                 LOGGER.debug("Currently RedisConnection[" + conn.getClass() + "] does not support the use of pipes, ignore it.");
             }
         } finally {
@@ -670,7 +745,11 @@ public class CustomRedisTokenStore extends RedisTokenStore {
         return accessTokens;
     }
 
+    /**
+     * @deprecated  CLIENT_ID_TO_ACCESS 缓存的认证信息会造成缓存数据过多且几乎不会过期，因此禁用 CLIENT_ID_TO_ACCESS，此方法返回数据始终为空
+     */
     @Override
+    @Deprecated
     public Collection<OAuth2AccessToken> findTokensByClientId(String clientId) {
         byte[] key = serializeKey(CLIENT_ID_TO_ACCESS + clientId);
         List<byte[]> byteList = null;

@@ -24,6 +24,7 @@ public class SecurityAttributes {
 
     public static final String SECURITY_LOGIN_MOBILE = "phone";
     public static final String SECURITY_ERROR_CODE = "errorCode";
+    public static final String SECURITY_FORCE_CODE_VERIFY = "forceCodeVerify";
 
     /**
      * 清除session中security相关变量

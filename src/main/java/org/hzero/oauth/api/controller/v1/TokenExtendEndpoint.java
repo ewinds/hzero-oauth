@@ -1,20 +1,22 @@
 package org.hzero.oauth.api.controller.v1;
 
-import io.choerodon.core.oauth.CustomUserDetails;
-import org.hzero.oauth.domain.repository.UserRepository;
+import java.security.Principal;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.common.OAuth2AccessToken;
-import org.springframework.security.oauth2.provider.*;
+import org.springframework.security.oauth2.provider.OAuth2Authentication;
 import org.springframework.security.oauth2.provider.endpoint.FrameworkEndpoint;
 import org.springframework.security.oauth2.provider.endpoint.TokenEndpoint;
-import org.springframework.security.oauth2.provider.request.DefaultOAuth2RequestValidator;
 import org.springframework.security.oauth2.provider.token.TokenStore;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
-import java.security.Principal;
-import java.util.Map;
+import io.choerodon.core.oauth.CustomUserDetails;
+
+import org.hzero.oauth.domain.repository.UserRepository;
 
 /**
  * @author XCXCXCXCX
@@ -35,6 +37,7 @@ public class TokenExtendEndpoint {
         this.userRepository = userRepository;
     }
 
+    @Deprecated
     @GetMapping("/oauth/user")
     public ResponseEntity<?> getUser(Principal principal, @RequestParam
             Map<String, String> parameters) throws HttpRequestMethodNotSupportedException {

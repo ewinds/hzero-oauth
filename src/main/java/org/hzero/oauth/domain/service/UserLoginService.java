@@ -3,10 +3,12 @@ package org.hzero.oauth.domain.service;
 import org.hzero.boot.oauth.domain.entity.BaseOpenApp;
 import org.hzero.core.captcha.CaptchaResult;
 import org.hzero.core.user.UserType;
+import org.hzero.oauth.api.dto.Result;
 import org.hzero.oauth.domain.entity.User;
 import org.hzero.oauth.domain.vo.AuthenticationResult;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
 import java.util.List;
 import java.util.Map;
 
@@ -86,4 +88,27 @@ public interface UserLoginService {
      */
     AuthenticationResult bindOpenAccount(HttpServletRequest request);
 
+    /**
+     * 强制修改密码发送验证码
+     *
+     * @param session              session对象
+     * @param internationalTelCode 国冠码
+     * @param phone                手机号
+     * @param userType             用户类型
+     * @param businessScope        业务范围
+     * @return 验证码发送结果
+     */
+    Result forceModifyPwdSendCaptcha(HttpSession session, String internationalTelCode,
+                                     String phone, String userType, String businessScope);
+
+    /**
+     * @param session
+     * @param secCheckType
+     * @param internationalTelCode
+     * @param userType
+     * @param businessScope
+     * @return
+     */
+    Result secCheckSendCaptcha(HttpSession session, String secCheckType, String internationalTelCode,
+                               String userType, String businessScope);
 }

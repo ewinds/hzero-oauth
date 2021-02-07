@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.oauth2.provider.ClientDetails;
 import org.springframework.security.oauth2.provider.ClientDetailsService;
 import org.springframework.security.oauth2.provider.NoSuchClientException;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import io.choerodon.core.oauth.CustomClientDetails;
@@ -18,37 +17,32 @@ import io.choerodon.core.oauth.CustomClientDetails;
 import org.hzero.boot.oauth.domain.entity.BaseClient;
 import org.hzero.boot.oauth.domain.repository.BaseClientRepository;
 import org.hzero.core.base.BaseConstants;
-import org.hzero.oauth.security.service.ClientDetailsWrapper;
 
-@Component
 public class CustomClientDetailsService implements ClientDetailsService {
     private static final Logger LOGGER = LoggerFactory.getLogger(CustomClientDetailsService.class);
 
     private static final ObjectMapper mapper = BaseConstants.MAPPER;
 
     private final BaseClientRepository baseClientRepository;
-    private final ClientDetailsWrapper clientDetailsWrapper;
 
-    private static final ThreadLocal<ClientDetails> LOCAL_CLIENT_DETAILS = new ThreadLocal<>();
+    private static final ThreadLocal<CustomClientDetails> LOCAL_CLIENT_DETAILS = new ThreadLocal<>();
 
-    public CustomClientDetailsService(BaseClientRepository baseClientRepository,
-                                      ClientDetailsWrapper clientDetailsWrapper) {
+    public CustomClientDetailsService(BaseClientRepository baseClientRepository) {
         this.baseClientRepository = baseClientRepository;
-        this.clientDetailsWrapper = clientDetailsWrapper;
     }
 
     @Override
     public ClientDetails loadClientByClientId(String name) {
-        ClientDetails localClientDetails = LOCAL_CLIENT_DETAILS.get();
-        if (localClientDetails != null) {
-            return localClientDetails;
+        CustomClientDetails clientDetails = LOCAL_CLIENT_DETAILS.get();
+        if (clientDetails != null) {
+            return clientDetails;
         }
 
         BaseClient client = baseClientRepository.selectClient(name);
         if (client == null) {
             throw new NoSuchClientException("No client found : " + name);
         }
-        CustomClientDetails clientDetails = new CustomClientDetails();
+        clientDetails = new CustomClientDetails();
         clientDetails.setId(client.getId());
         clientDetails.setAuthorizedGrantTypes(StringUtils.commaDelimitedListToSet(client.getAuthorizedGrantTypes()));
         clientDetails.setClientId(client.getName());
@@ -74,7 +68,7 @@ public class CustomClientDetailsService implements ClientDetailsService {
         clientDetails.setAutoApproveScopes(StringUtils.commaDelimitedListToSet(client.getAutoApprove()));
         clientDetails.setTimeZone(client.getTimeZone());
         clientDetails.setApiEncryptFlag(client.getApiEncryptFlag());
-        clientDetailsWrapper.warp(clientDetails, client.getId(), client.getOrganizationId());
+        clientDetails.setApiReplayFlag(client.getApiReplayFlag());
 
         LOCAL_CLIENT_DETAILS.set(clientDetails);
 

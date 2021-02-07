@@ -7,6 +7,7 @@ import org.springframework.security.oauth2.config.annotation.web.configuration.E
 import org.springframework.security.oauth2.config.annotation.web.configuration.ResourceServerConfigurerAdapter;
 import org.springframework.security.oauth2.config.annotation.web.configurers.ResourceServerSecurityConfigurer;
 import org.springframework.security.oauth2.provider.ClientDetailsService;
+import org.springframework.security.oauth2.provider.authentication.BearerTokenExtractor;
 
 import org.hzero.oauth.security.config.SecurityProperties;
 import org.hzero.oauth.security.custom.CustomClientDetailsService;
@@ -24,11 +25,14 @@ public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
     @Autowired(required = false)
     private ResourceMatcher resourceMatcher;
     @Autowired
-    private CustomClientDetailsService clientDetailsService;
+    private CustomClientDetailsService customClientDetailsService;
+    @Autowired
+    private BearerTokenExtractor bearerTokenExtractor;
 
     @Override
     public void configure(HttpSecurity http) throws Exception {
-        http.setSharedObject(ClientDetailsService.class, clientDetailsService);
+        // TODO AuthorizationServerSecurityConfiguration - 98 行 why?
+        http.setSharedObject(ClientDetailsService.class, customClientDetailsService);
         if (properties.isCustomResourceMatcher() && resourceMatcher != null) {
             http
                 .requestMatcher(resourceMatcher)
@@ -44,6 +48,9 @@ public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
 
     @Override
     public void configure(ResourceServerSecurityConfigurer resources) throws Exception {
-        resources.resourceId("default");
+        resources
+            .resourceId("default")
+            .tokenExtractor(bearerTokenExtractor)
+        ;
     }
 }

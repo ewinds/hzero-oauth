@@ -7,6 +7,7 @@ import com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import org.hzero.core.util.DomainUtils;
 import org.hzero.oauth.security.constant.LoginField;
 
 /**
@@ -23,15 +24,9 @@ public class SecurityProperties {
     private Login login = new Login();
 
     /**
-     * 登出配置
-     */
-    private Logout logout = new Logout();
-
-    /**
      * 密码传输配置
      */
     private Password password = new Password();
-
 
     /**
      * 默认标题
@@ -91,9 +86,24 @@ public class SecurityProperties {
     private String[] permitPaths = new String[]{};
 
     /**
-     * oauth 服务基础地址
+     * 是否自动续期，如果 access_token 过期但是 refresh_token 未过期，则自动续期 access_token
+     */
+    private boolean accessTokenAutoRenewal = false;
+
+    /**
+     * oauth 服务基础地址，可为空
      */
     private String baseUrl;
+
+    /**
+     * 是否启用 https，配置了 baseUrl，则判断 baseUrl 是否以 https:// 开头
+     */
+    private boolean enableHttps;
+
+    /**
+     * 是否检查 redirect_uri 的一致性
+     */
+    private boolean checkRedirectUri = true;
 
     /**
      * 端口映射
@@ -114,6 +124,10 @@ public class SecurityProperties {
          */
         private String passForceModifyPage = "/pass-page/force-modify";
         /**
+         * 二次校验页面
+         */
+        private String passSecondaryCheckPage = "/pass-page/secondary-check";
+        /**
          * 登录成功地址
          */
         private String successUrl = "/";
@@ -121,12 +135,6 @@ public class SecurityProperties {
          * ssl
          */
         private boolean ssl = false;
-
-        /**
-         * #网关是否启用https
-         */
-        @Deprecated
-        private boolean enableHttps;
 
         /**
          * 支持的登录字段
@@ -141,6 +149,10 @@ public class SecurityProperties {
          * 手机短信登录参数
          */
         private String mobileParameter = "phone";
+        /**
+         * 二次校验账户登录参数
+         */
+        private String secCheckTypeParameter = "secCheckType";
 
         /**
          * 默认模板
@@ -157,16 +169,25 @@ public class SecurityProperties {
          */
         private String mobileLoginProcessUrl = "/login/sms";
         /**
+         * 二次校验处理地址
+         */
+        private String secCheckLoginProcessUrl = "/login/secCheck";
+        /**
          * 密码防重放缓存过期时间(天)
          */
         private Long passReplayExpire = 30L;
 
+        /**
+         * 登录账号是否加密传输
+         */
+        private boolean accountEncrypt = false;
+        /**
+         * 登录密码是否加密传输
+         */
+        private boolean passwordEncrypt = true;
+
         public String getPage() {
             return page;
-        }
-
-        public String getAbsoluteLoginPage() {
-            return baseUrl + page;
         }
 
         public void setPage(String page) {
@@ -187,6 +208,14 @@ public class SecurityProperties {
 
         public void setPassForceModifyPage(String passForceModifyPage) {
             this.passForceModifyPage = passForceModifyPage;
+        }
+
+        public String getPassSecondaryCheckPage() {
+            return passSecondaryCheckPage;
+        }
+
+        public void setPassSecondaryCheckPage(String passSecondaryCheckPage) {
+            this.passSecondaryCheckPage = passSecondaryCheckPage;
         }
 
         public String getSuccessUrl() {
@@ -229,20 +258,20 @@ public class SecurityProperties {
             this.mobileParameter = mobileParameter;
         }
 
+        public String getSecCheckTypeParameter() {
+            return secCheckTypeParameter;
+        }
+
+        public void setSecCheckTypeParameter(String secCheckTypeParameter) {
+            this.secCheckTypeParameter = secCheckTypeParameter;
+        }
+
         public String getDefaultTemplate() {
             return defaultTemplate;
         }
 
         public void setDefaultTemplate(String defaultTemplate) {
             this.defaultTemplate = defaultTemplate;
-        }
-
-        public boolean isEnableHttps() {
-            return enableHttps;
-        }
-
-        public void setEnableHttps(boolean enableHttps) {
-            this.enableHttps = enableHttps;
         }
 
         public String getDefaultClientId() {
@@ -261,6 +290,14 @@ public class SecurityProperties {
             this.mobileLoginProcessUrl = mobileLoginProcessUrl;
         }
 
+        public String getSecCheckLoginProcessUrl() {
+            return secCheckLoginProcessUrl;
+        }
+
+        public void setSecCheckLoginProcessUrl(String secCheckLoginProcessUrl) {
+            this.secCheckLoginProcessUrl = secCheckLoginProcessUrl;
+        }
+
         public Long getPassReplayExpire() {
             return passReplayExpire;
         }
@@ -269,22 +306,21 @@ public class SecurityProperties {
             this.passReplayExpire = passReplayExpire;
             return this;
         }
-    }
 
-
-    public static class Logout {
-
-        /**
-         * 退出时是否清除Token
-         */
-        private boolean clearToken = false;
-
-        public boolean isClearToken() {
-            return clearToken;
+        public boolean isAccountEncrypt() {
+            return accountEncrypt;
         }
 
-        public void setClearToken(boolean clearToken) {
-            this.clearToken = clearToken;
+        public void setAccountEncrypt(boolean accountEncrypt) {
+            this.accountEncrypt = accountEncrypt;
+        }
+
+        public boolean isPasswordEncrypt() {
+            return passwordEncrypt;
+        }
+
+        public void setPasswordEncrypt(boolean passwordEncrypt) {
+            this.passwordEncrypt = passwordEncrypt;
         }
     }
 
@@ -300,6 +336,7 @@ public class SecurityProperties {
         /**
          * 是否启用加密传输
          */
+        @Deprecated
         private boolean enableEncrypt = true;
 
         public String getPublicKey() {
@@ -318,10 +355,12 @@ public class SecurityProperties {
             this.privateKey = privateKey;
         }
 
+        @Deprecated
         public boolean isEnableEncrypt() {
             return enableEncrypt;
         }
 
+        @Deprecated
         public void setEnableEncrypt(boolean enableEncrypt) {
             this.enableEncrypt = enableEncrypt;
         }
@@ -368,14 +407,6 @@ public class SecurityProperties {
 
     public void setLogin(Login login) {
         this.login = login;
-    }
-
-    public Logout getLogout() {
-        return logout;
-    }
-
-    public void setLogout(Logout logout) {
-        this.logout = logout;
     }
 
     public Password getPassword() {
@@ -482,6 +513,15 @@ public class SecurityProperties {
         this.permitPaths = permitPaths;
     }
 
+    public boolean isAccessTokenAutoRenewal() {
+        return accessTokenAutoRenewal;
+    }
+
+    public SecurityProperties setAccessTokenAutoRenewal(boolean accessTokenAutoRenewal) {
+        this.accessTokenAutoRenewal = accessTokenAutoRenewal;
+        return this;
+    }
+
     public String getBaseUrl() {
         return baseUrl;
     }
@@ -492,9 +532,13 @@ public class SecurityProperties {
 
     public boolean isEnableHttps() {
         if (StringUtils.isNotBlank(baseUrl)) {
-            return baseUrl.startsWith("https://");
+            return baseUrl.startsWith(DomainUtils.HTTPS);
         }
-        return login.isEnableHttps();
+        return enableHttps;
+    }
+
+    public void setEnableHttps(boolean enableHttps) {
+        this.enableHttps = enableHttps;
     }
 
     public List<PortMapper> getPortMapper() {
@@ -503,5 +547,13 @@ public class SecurityProperties {
 
     public void setPortMapper(List<PortMapper> portMapper) {
         this.portMapper = portMapper;
+    }
+
+    public boolean isCheckRedirectUri() {
+        return checkRedirectUri;
+    }
+
+    public void setCheckRedirectUri(boolean checkRedirectUri) {
+        this.checkRedirectUri = checkRedirectUri;
     }
 }

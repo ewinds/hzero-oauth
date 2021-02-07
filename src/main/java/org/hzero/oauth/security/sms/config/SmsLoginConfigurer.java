@@ -2,7 +2,6 @@ package org.hzero.oauth.security.sms.config;
 
 import javax.servlet.http.HttpServletRequest;
 
-import org.hzero.oauth.security.sms.SmsAuthenticationFilter;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.SecurityConfigurerAdapter;
@@ -14,6 +13,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
+
+import org.hzero.oauth.security.sms.SmsAuthenticationFilter;
 
 /**
  * 短信登录配置器
@@ -33,7 +34,7 @@ public class SmsLoginConfigurer extends SecurityConfigurerAdapter<DefaultSecurit
     private AuthenticationFailureHandler failureHandler;
 
     /**
-     * 默认手机+短信验证码 登录处理地址 [POST "/authentication/mobile"]. 默认手机参数 - mobile
+     * 默认手机+短信验证码 登录处理地址 [POST "/login/sms"]. 默认手机参数 - mobile
      */
     public SmsLoginConfigurer() {
         authFilter = new SmsAuthenticationFilter();

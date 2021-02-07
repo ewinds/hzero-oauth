@@ -9,9 +9,11 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import javax.naming.directory.DirContext;
 
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.ldap.core.DirContextOperations;
 import org.springframework.ldap.core.LdapTemplate;
 import org.springframework.ldap.core.support.AbstractContextMapper;
@@ -24,6 +26,8 @@ import org.springframework.security.authentication.dao.AbstractUserDetailsAuthen
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import io.choerodon.core.ldap.DirectoryType;
 
@@ -36,18 +40,18 @@ import org.hzero.common.HZeroService;
 import org.hzero.core.base.BaseConstants;
 import org.hzero.core.captcha.CaptchaImageHelper;
 import org.hzero.core.user.UserType;
+import org.hzero.core.util.AssertUtils;
 import org.hzero.core.util.EncryptionUtils;
 import org.hzero.oauth.domain.entity.User;
 import org.hzero.oauth.domain.repository.UserRepository;
 import org.hzero.oauth.infra.encrypt.EncryptClient;
 import org.hzero.oauth.security.config.SecurityProperties;
-import org.hzero.oauth.security.constant.LoginException;
-import org.hzero.oauth.security.constant.LoginSource;
-import org.hzero.oauth.security.constant.LoginType;
+import org.hzero.oauth.security.constant.*;
 import org.hzero.oauth.security.exception.AccountNotExistsException;
 import org.hzero.oauth.security.exception.CustomAuthenticationException;
 import org.hzero.oauth.security.exception.ErrorWithTimesException;
 import org.hzero.oauth.security.exception.LoginExceptions;
+import org.hzero.oauth.security.secheck.SecCheckVO;
 import org.hzero.oauth.security.service.LoginRecordService;
 import org.hzero.oauth.security.service.UserAccountService;
 import org.hzero.oauth.security.util.LoginUtil;
@@ -56,33 +60,25 @@ import org.hzero.oauth.security.util.PasswordDecode;
 public class CustomAuthenticationProvider extends AbstractUserDetailsAuthenticationProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger(CustomAuthenticationProvider.class);
 
-    private final CustomUserDetailsService userDetailsService;
-    private final BaseLdapRepository baseLdapRepository;
-    private final UserAccountService userAccountService;
-    private final LoginRecordService loginRecordService;
-    private final CaptchaImageHelper captchaImageHelper;
-    private final SecurityProperties securityProperties;
-    private final EncryptClient encryptClient;
-    private final UserRepository userRepository;
+    @Autowired
+    private UserDetailsService userDetailsService;
+    @Autowired
+    private BaseLdapRepository baseLdapRepository;
+    @Autowired
+    private UserAccountService userAccountService;
+    @Autowired
+    private LoginRecordService loginRecordService;
+    @Autowired
+    private CaptchaImageHelper captchaImageHelper;
+    @Autowired
+    private SecurityProperties securityProperties;
+    @Autowired
+    private EncryptClient encryptClient;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
     private PasswordEncoder passwordEncoder = new CustomBCryptPasswordEncoder();
 
-    public CustomAuthenticationProvider(CustomUserDetailsService userDetailsService,
-                                        BaseLdapRepository baseLdapRepository,
-                                        UserAccountService userAccountService,
-                                        LoginRecordService loginRecordService,
-                                        CaptchaImageHelper captchaImageHelper,
-                                        SecurityProperties securityProperties,
-                                        EncryptClient encryptClient,
-                                        UserRepository userRepository) {
-        this.userDetailsService = userDetailsService;
-        this.baseLdapRepository = baseLdapRepository;
-        this.userAccountService = userAccountService;
-        this.loginRecordService = loginRecordService;
-        this.captchaImageHelper = captchaImageHelper;
-        this.securityProperties = securityProperties;
-        this.encryptClient = encryptClient;
-        this.userRepository = userRepository;
-    }
 
     public void setPasswordEncoder(PasswordEncoder passwordEncoder) {
         if (passwordEncoder != null) {
@@ -98,6 +94,8 @@ public class CustomAuthenticationProvider extends AbstractUserDetailsAuthenticat
 
     @Override
     public UserDetails retrieveUser(String username, UsernamePasswordAuthenticationToken authentication) {
+        username = getDecryptAccount(username);
+
         // 获取当前登录用户信息
         String loginField = null;
         String userType = null;
@@ -143,6 +141,8 @@ public class CustomAuthenticationProvider extends AbstractUserDetailsAuthenticat
         checkPassword(userDetails, authentication);
         // 检查是否可访问客户端
         checkAccessClient(userDetails, client);
+        // 检查是否进行二次校验
+        checkSecondaryCheck();
     }
 
     /**
@@ -181,6 +181,36 @@ public class CustomAuthenticationProvider extends AbstractUserDetailsAuthenticat
             }
         }
         throw new CustomAuthenticationException(LoginExceptions.USER_NOT_ACCESS_CLIENT.value());
+    }
+
+    /**
+     * 检查是否进行二次校验
+     */
+    private void checkSecondaryCheck() {
+        // 判断是否启用二次登录，必须要保证登录成功了，才进行此判断
+        User localLoginUser = loginRecordService.getLocalLoginUser();
+        // 非ldap用户且开启了二次校验才进行二次校验的逻辑
+        if (Boolean.FALSE.equals(localLoginUser.getLdap()) && localLoginUser.isOpenSecCheck()) {
+            RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+            AssertUtils.notNull(requestAttributes, "Request Attributes Required");
+
+            SecCheckVO secCheckVO = new SecCheckVO();
+            // 判断是否可使用手机号验证
+            if (BooleanUtils.isTrue(localLoginUser.getSecCheckPhoneFlag())) {
+                secCheckVO.addSupportTypes(LoginField.PHONE.code());
+                secCheckVO.setPhone(localLoginUser.getPhone());
+            }
+            // 判断是否可使用邮箱验证
+            if (BooleanUtils.isTrue(localLoginUser.getSecCheckEmailFlag())) {
+                secCheckVO.addSupportTypes(LoginField.EMAIL.code());
+                secCheckVO.setEmail(localLoginUser.getEmail());
+            }
+
+            // 在SESSION中缓存二次校验信息
+            requestAttributes.setAttribute(SecCheckVO.SEC_CHECK_KEY, secCheckVO, RequestAttributes.SCOPE_SESSION);
+            // 二次登录异常
+            throw new CustomAuthenticationException(LoginExceptions.SECONDARY_CHECK.value());
+        }
     }
 
     /**
@@ -256,13 +286,33 @@ public class CustomAuthenticationProvider extends AbstractUserDetailsAuthenticat
     }
 
     /**
+     * 解密账号
+     *
+     * @param content 加密的内容
+     * @return 解密后的内容
+     */
+    protected String getDecryptAccount(String content) {
+        // RSA 非对称加密
+        try {
+            if (securityProperties.getLogin().isAccountEncrypt()) {
+                return encryptClient.decrypt(content);
+            } else {
+                return content;
+            }
+        } catch (Exception e) {
+            LOGGER.error("decode account error. ex={}", e.getMessage());
+            throw new AuthenticationServiceException(LoginExceptions.DECODE_PASSWORD_ERROR.value());
+        }
+    }
+
+    /**
      * 获取客户端解密后的密码
      */
     protected String getDecryptPassword(UsernamePasswordAuthenticationToken authentication) {
         String credentials = null;
         try {
             // RSA 非对称加密
-            if (securityProperties.getPassword().isEnableEncrypt()) {
+            if (securityProperties.getLogin().isPasswordEncrypt()) {
                 credentials = encryptClient.decrypt((String) authentication.getCredentials());
             }
             // Base64 解密
@@ -326,6 +376,12 @@ public class CustomAuthenticationProvider extends AbstractUserDetailsAuthenticat
 
         // 校验是否开启了强制修改初始密码且当前用户未修改过初始密码
         if (userAccountService.isNeedForceModifyPassword(basePasswordPolicy, user)) {
+            RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+            AssertUtils.notNull(requestAttributes, "Request Attributes Required");
+            requestAttributes.setAttribute(SecurityAttributes.SECURITY_FORCE_CODE_VERIFY, basePasswordPolicy.getForceCodeVerify(),
+                    RequestAttributes.SCOPE_SESSION);
+            requestAttributes.setAttribute(SecurityAttributes.SECURITY_LOGIN_MOBILE, user.getPhone(),
+                    RequestAttributes.SCOPE_SESSION);
             throw new CustomAuthenticationException(LoginExceptions.PASSWORD_FORCE_MODIFY.value());
         }
     }

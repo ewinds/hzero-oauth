@@ -54,7 +54,7 @@ public interface LoginRecordService {
     void clearLocalLoginUser();
 
     /**
-     * 记录登录成功地址
+     * 登录成功后，记录登出地址
      *
      * @param tokenValue        access_token
      * @param logoutRedirectUrl HttpServletRequest
@@ -62,9 +62,18 @@ public interface LoginRecordService {
     void recordLogoutUrl(String tokenValue, String logoutRedirectUrl);
 
     /**
-     * 获取记录的登录跳转地址
+     * 清除登出地址
+     *
+     * @param tokenValue access_token
+     */
+    void removeLogoutUrl(String tokenValue);
+
+    /**
+     * 获取记录的登录跳转地址，并
      */
     String getLogoutUrl(String tokenValue);
+
+    boolean existsLogoutUrl(String tokenValue);
 
     /**
      * 保存密码

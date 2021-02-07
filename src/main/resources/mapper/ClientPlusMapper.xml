@@ -77,7 +77,7 @@
             oc.name = #{clientName}
     </select>
     <select id="selectRoleDetails" resultMap="RoleDetails">
-        <bind name="now" value="@java.time.LocalDate@now().toString()" />
+        <bind name="now" value="@java.time.LocalDate@now()" />
         SELECT
             ir.h_tenant_id,
             imr.role_id

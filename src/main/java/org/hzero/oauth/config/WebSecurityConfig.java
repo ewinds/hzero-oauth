@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +17,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.PortMapper;
 import org.springframework.security.web.PortResolver;
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
@@ -27,18 +29,17 @@ import org.springframework.web.accept.HeaderContentNegotiationStrategy;
 import org.hzero.oauth.domain.service.ClearResourceFilter;
 import org.hzero.oauth.domain.service.ClearResourceService;
 import org.hzero.oauth.security.config.SecurityProperties;
-import org.hzero.oauth.security.custom.CustomAuthenticationDetailsSource;
-import org.hzero.oauth.security.custom.CustomAuthenticationFailureHandler;
-import org.hzero.oauth.security.custom.CustomAuthenticationSuccessHandler;
-import org.hzero.oauth.security.custom.CustomLogoutSuccessHandler;
+import org.hzero.oauth.security.custom.*;
+import org.hzero.oauth.security.secheck.SecCheckAuthenticationDetailsSource;
+import org.hzero.oauth.security.secheck.SecCheckAuthenticationFailureHandler;
+import org.hzero.oauth.security.secheck.SecCheckAuthenticationProvider;
+import org.hzero.oauth.security.secheck.config.SecCheckLoginConfigurer;
 import org.hzero.oauth.security.sms.SmsAuthenticationDetailsSource;
 import org.hzero.oauth.security.sms.SmsAuthenticationFailureHandler;
 import org.hzero.oauth.security.sms.SmsAuthenticationProvider;
 import org.hzero.oauth.security.sms.config.EnableSmsLogin;
 import org.hzero.oauth.security.sms.config.SmsLoginConfigurer;
-import org.hzero.sso.core.config.EnableSsoLogin;
-import org.hzero.sso.core.config.SsoAuthenticationEntryPoint;
-import org.hzero.sso.core.config.SsoProperties;
+import org.hzero.sso.core.configuration.EnableSsoLogin;
 import org.hzero.starter.social.core.configuration.EnableSocialLogin;
 
 /**
@@ -54,17 +55,18 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
     @Autowired
     private SecurityProperties securityProperties;
     @Autowired
-    private SsoProperties ssoProperties;
-    @Autowired
     private CustomAuthenticationDetailsSource detailsSource;
     @Autowired
     private CustomAuthenticationFailureHandler authenticationFailureHandler;
     @Autowired
     private CustomAuthenticationSuccessHandler authenticationSuccessHandler;
     @Autowired
-    private CustomLogoutSuccessHandler customLogoutSuccessHandler;
+    private CustomLogoutSuccessHandler logoutSuccessHandler;
     @Autowired
     private ClearResourceService clearResourceService;
+    @Autowired(required = false)
+    @Qualifier("authenticationEntryPoint")
+    private AuthenticationEntryPoint authenticationEntryPoint;
 
     @Autowired(required = false)
     private SmsAuthenticationDetailsSource smsAuthenticationDetailsSource;
@@ -79,12 +81,19 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
     private PortResolver portResolver;
 
     @Autowired(required = false)
-    private SsoAuthenticationEntryPoint ssoAuthenticationEntryPoint;
+    private SecCheckAuthenticationDetailsSource secCheckAuthenticationDetailsSource;
+    @Autowired(required = false)
+    private SecCheckAuthenticationFailureHandler secCheckAuthenticationFailureHandler;
+    @Autowired(required = false)
+    private SecCheckAuthenticationProvider secCheckAuthenticationProvider;
 
-    private static final String[] PERMIT_PATHS = new String[] {
-                "/login", "/login/**", "/open-bind", "/token/**", "/pass-page/**", "/admin/**",
-                "/v2/choerodon/**", "/choerodon/**", "/public/**", "/password/**",
-                "/admin/**","/static/**", "/saml/metadata", "/actuator/**"
+    @Autowired(required = false)
+    private CustomHttpSecurityConfigurer customHttpSecurityConfigurer;
+
+    private static final String[] PERMIT_PATHS = new String[]{
+            "/login", "/login/**", "/open-bind", "/token/**", "/pass-page/**", "/admin/**", "/oauth/user",
+            "/v2/choerodon/**", "/choerodon/**", "/public/**", "/password/**",
+            "/admin/**", "/static/**", "/saml/metadata", "/actuator/**", "/v2/market/**"
     };
 
     @Override
@@ -93,7 +102,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 
         http
                 .authorizeRequests()
-                .antMatchers (permitPaths)
+                .antMatchers(permitPaths)
                 .permitAll()
                 .and()
                 .authorizeRequests()
@@ -107,7 +116,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .successHandler(authenticationSuccessHandler)
                 .and()
                 .logout().deleteCookies("access_token").invalidateHttpSession(true)
-                .logoutSuccessHandler(customLogoutSuccessHandler)
+                .logoutSuccessHandler(logoutSuccessHandler)
                 .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
                 .and()
                 .portMapper()
@@ -116,6 +125,9 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .requestCache()
                 .requestCache(getRequestCache(http))
                 .and()
+                .exceptionHandling()
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .and()
                 .csrf()
                 .disable()
         ;
@@ -123,21 +135,28 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         // 配置短信登录方式
         SmsLoginConfigurer smsLoginConfigurer = new SmsLoginConfigurer();
         smsLoginConfigurer
-            .authenticationDetailsSource(smsAuthenticationDetailsSource)
-            .successHandler(authenticationSuccessHandler)
-            .failureHandler(smsAuthenticationFailureHandler)
-            .mobileParameter(securityProperties.getLogin().getMobileParameter())
-            .loginProcessingUrl(securityProperties.getLogin().getMobileLoginProcessUrl())
+                .authenticationDetailsSource(smsAuthenticationDetailsSource)
+                .successHandler(authenticationSuccessHandler)
+                .failureHandler(smsAuthenticationFailureHandler)
+                .mobileParameter(securityProperties.getLogin().getMobileParameter())
+                .loginProcessingUrl(securityProperties.getLogin().getMobileLoginProcessUrl())
         ;
         http.apply(smsLoginConfigurer);
         http.authenticationProvider(smsAuthenticationProvider);
 
-        // SSO 认证
-        if (ssoProperties.getSso().isEnabled()) {
-            http
-                .exceptionHandling()
-                .authenticationEntryPoint(ssoAuthenticationEntryPoint)
-                ;
+        // 配置二次校验登录方式
+        SecCheckLoginConfigurer secCheckLoginConfigurer = new SecCheckLoginConfigurer();
+        secCheckLoginConfigurer
+                .authenticationDetailsSource(this.secCheckAuthenticationDetailsSource)
+                .successHandler(this.authenticationSuccessHandler)
+                .failureHandler(this.secCheckAuthenticationFailureHandler)
+                .secCheckTypeParameter(this.securityProperties.getLogin().getSecCheckTypeParameter())
+                .loginProcessingUrl(this.securityProperties.getLogin().getSecCheckLoginProcessUrl());
+        http.apply(secCheckLoginConfigurer);
+        http.authenticationProvider(this.secCheckAuthenticationProvider);
+
+        if (customHttpSecurityConfigurer != null) {
+            customHttpSecurityConfigurer.configureHttpSecurity(http);
         }
     }
 

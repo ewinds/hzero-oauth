@@ -22,8 +22,8 @@ import javax.servlet.http.HttpServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.web.PortResolver;
 import org.springframework.util.Assert;
 import org.springframework.util.ObjectUtils;
@@ -55,7 +55,7 @@ public class DefaultSavedRequest implements SavedRequest {
 	// ~ Static fields/initializers
 	// =====================================================================================
 
-	protected static final Log logger = LogFactory.getLog(DefaultSavedRequest.class);
+	protected final Logger logger = LoggerFactory.getLogger(getClass());
 
 	private static final String HEADER_IF_NONE_MATCH = "If-None-Match";
 	private static final String HEADER_IF_MODIFIED_SINCE = "If-Modified-Since";
@@ -78,6 +78,8 @@ public class DefaultSavedRequest implements SavedRequest {
 	private final String serverName;
 	private final String servletPath;
 	private final int serverPort;
+
+	private final String absoluteRedirectUrl;
 
 	// ~ Constructors
 	// ===================================================================================================
@@ -119,15 +121,15 @@ public class DefaultSavedRequest implements SavedRequest {
 		this.queryString = request.getQueryString();
 		this.requestURI = request.getRequestURI();
 		this.serverPort = portResolver.getServerPort(request);
-		//this.requestURL = request.getRequestURL().toString();
+		this.requestURL = request.getRequestURL().toString();
 		this.scheme = request.getScheme();
 		this.serverName = request.getServerName();
 		this.contextPath = request.getContextPath();
 		this.servletPath = request.getServletPath();
 
-		this.requestURL = RequestUtil.getOauthRootURL(request) + requestURI.replaceFirst(contextPath, "");
+		this.absoluteRedirectUrl = RequestUtil.getFullURL(this);
 
-		logger.debug("SavedRequest URL is: [" + requestURL + "]");
+		logger.debug("Build DefaultSavedRequest: originURL: [{}?{}], newURL: [{}]", this.requestURL, this.queryString, this.absoluteRedirectUrl);
 	}
 
 	/**
@@ -144,6 +146,10 @@ public class DefaultSavedRequest implements SavedRequest {
 		this.serverName = builder.serverName;
 		this.servletPath = builder.servletPath;
 		this.serverPort = builder.serverPort;
+
+		this.absoluteRedirectUrl = RequestUtil.getFullURL(this);
+
+		logger.debug("Build DefaultSavedRequest: originURL: [{}?{}], newURL: [{}]", this.requestURL, this.queryString, this.absoluteRedirectUrl);
 	}
 
 	// ~ Methods
@@ -289,11 +295,7 @@ public class DefaultSavedRequest implements SavedRequest {
 	public String getRedirectUrl() {
 		//return UrlUtils.buildFullRequestUrl(scheme, serverName, serverPort, requestURI,
 		//		queryString);
-		String redirectUrl = requestURL;
-		if (queryString != null) {
-			redirectUrl = redirectUrl + "?" + queryString;
-		}
-		return redirectUrl;
+		return absoluteRedirectUrl;
 	}
 
 	@Override

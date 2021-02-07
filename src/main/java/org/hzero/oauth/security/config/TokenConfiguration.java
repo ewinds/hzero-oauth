@@ -28,10 +28,10 @@ import org.hzero.starter.social.core.security.SocialAuthenticationProvider;
 @AutoConfigureAfter({AuthorizationServerEndpointsConfiguration.class, SocialWebSecurityConfigurerAdapter.class})
 public class TokenConfiguration {
 
-    private AuthorizationServerEndpointsConfigurer endpoints = new AuthorizationServerEndpointsConfigurer();
+    private final AuthorizationServerEndpointsConfigurer endpoints = new AuthorizationServerEndpointsConfigurer();
 
     @Autowired
-    private List<AuthorizationServerConfigurer> configurers = Collections.emptyList();
+    private final List<AuthorizationServerConfigurer> configurers = Collections.emptyList();
 
     @PostConstruct
     public void init() {
@@ -54,8 +54,7 @@ public class TokenConfiguration {
                 endpoints.getOAuth2RequestFactory(),
                 smsAuthenticationProvider,
                 authenticationDetailsSource,
-                securityProperties,
-                endpoints.getAuthorizeSuccessProcessors()
+                securityProperties
         );
         return tokenService;
     }
@@ -69,8 +68,7 @@ public class TokenConfiguration {
                 endpoints.getClientDetailsService(),
                 endpoints.getOAuth2RequestFactory(),
                 socialAuthenticationProvider,
-                socialProviderRepository,
-                endpoints.getAuthorizeSuccessProcessors()
+                socialProviderRepository
         );
         return tokenService;
     }

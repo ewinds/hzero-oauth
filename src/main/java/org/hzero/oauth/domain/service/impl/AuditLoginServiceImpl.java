@@ -9,12 +9,14 @@ import cz.mallat.uasparser.UASparser;
 import cz.mallat.uasparser.UserAgentInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.oauth2.common.OAuth2AccessToken;
 import org.springframework.security.oauth2.common.exceptions.InvalidTokenException;
 import org.springframework.security.oauth2.provider.OAuth2Authentication;
-import org.springframework.security.oauth2.provider.token.store.redis.RedisTokenStore;
+import org.springframework.security.oauth2.provider.token.TokenStore;
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import io.choerodon.core.exception.CommonException;
@@ -34,24 +36,21 @@ import org.hzero.oauth.infra.constant.Constants;
  *
  * @author shuangfei.zhu@hand-china.com 2019/10/11 9:47
  */
+@Component
 public class AuditLoginServiceImpl implements AuditLoginService {
 
-    private final AuditLoginRepository auditLoginRepository;
-    private final UserRepository userRepository;
-    private final RedisTokenStore redisTokenStore;
+    @Autowired
+    private AuditLoginRepository auditLoginRepository;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private TokenStore tokenStore;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AuditLoginServiceImpl.class);
     /**
      * Http bearer token key
      */
     private static final String HTTP_HEADER_BEARER_TOKEN_PREFIX = "bearer";
-
-    public AuditLoginServiceImpl(AuditLoginRepository auditLoginRepository, UserRepository userRepository, RedisTokenStore redisTokenStore) {
-        this.auditLoginRepository = auditLoginRepository;
-        this.userRepository = userRepository;
-        this.redisTokenStore = redisTokenStore;
-    }
-
 
     /**
      * 记录登陆信息
@@ -96,6 +95,7 @@ public class AuditLoginServiceImpl implements AuditLoginService {
                 .setAuditType(Constants.AuditType.LOGIN)
                 .setLoginMessage(loginMessage);
         if (user != null) {
+            // TODO 待优化
             User userDetail = userRepository.selectByPrimaryKey(user.getUserId());
             loginAudit.setPhone(userDetail.getPhone())
                     .setEmail(userDetail.getEmail())
@@ -231,7 +231,7 @@ public class AuditLoginServiceImpl implements AuditLoginService {
     private String getClientIdFromRedisTokenStore(HttpServletRequest request) {
         String clientId;
 
-        if (this.redisTokenStore == null) {
+        if (this.tokenStore == null) {
             LOGGER.warn("==========>redis token store is null<==========");
             return null;
         }
@@ -264,15 +264,15 @@ public class AuditLoginServiceImpl implements AuditLoginService {
     }
 
     private OAuth2Authentication loadAuthentication(String accessTokenValue) {
-        OAuth2AccessToken accessToken = redisTokenStore.readAccessToken(accessTokenValue);
+        OAuth2AccessToken accessToken = tokenStore.readAccessToken(accessTokenValue);
         if (accessToken == null) {
             throw new InvalidTokenException("Invalid access token: " + accessTokenValue);
         }
         if (accessToken.isExpired()) {
-            redisTokenStore.removeAccessToken(accessToken);
+            tokenStore.removeAccessToken(accessToken);
             throw new InvalidTokenException("Access token expired: " + accessTokenValue);
         }
-        OAuth2Authentication result = redisTokenStore.readAuthentication(accessToken);
+        OAuth2Authentication result = tokenStore.readAuthentication(accessToken);
         if (result == null) {
             // in case of race condition
             throw new InvalidTokenException("Invalid access token: " + accessTokenValue);

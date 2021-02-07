@@ -1,10 +1,7 @@
 package org.hzero.autoconfigure.oauth;
 
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.hzero.core.util.CommonExecutor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.openfeign.EnableFeignClients;
@@ -15,7 +12,9 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.security.oauth2.config.annotation.web.configuration.EnableOAuth2Client;
 import org.springframework.session.data.redis.config.annotation.web.http.EnableRedisHttpSession;
 
-import org.hzero.core.util.CommonExecutor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Oauth 自动化配置
@@ -31,11 +30,12 @@ import org.hzero.core.util.CommonExecutor;
 })
 @EnableFeignClients({"org.hzero.oauth"})
 @EnableOAuth2Client
-@EnableRedisHttpSession(maxInactiveIntervalInSeconds = 600)
+@EnableRedisHttpSession(maxInactiveIntervalInSeconds = OauthAutoConfiguration.MAX_INACTIVE_INTERVAL_IN_SECONDS)
 @EnableConfigurationProperties
 @Configuration
 @EnableAsync
 public class OauthAutoConfiguration {
+    public static final int MAX_INACTIVE_INTERVAL_IN_SECONDS = 600;
 
     /**
      * 通用线程池

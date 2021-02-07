@@ -1,26 +1,32 @@
 package org.hzero.oauth.security.social;
 
+import org.hzero.boot.oauth.domain.entity.BaseOpenApp;
+import org.hzero.boot.oauth.domain.repository.BaseOpenAppRepository;
+import org.hzero.mybatis.helper.DataSecurityHelper;
+import org.hzero.mybatis.security.DataSecurityInterceptor;
+import org.hzero.mybatis.service.DataSecurityKeyService;
+import org.hzero.starter.social.core.provider.Provider;
+import org.hzero.starter.social.core.provider.SocialProviderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.CollectionUtils;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.util.CollectionUtils;
-
-import org.hzero.boot.oauth.domain.entity.BaseOpenApp;
-import org.hzero.boot.oauth.domain.repository.BaseOpenAppRepository;
-import org.hzero.mybatis.helper.DataSecurityHelper;
-import org.hzero.starter.social.core.provider.Provider;
-import org.hzero.starter.social.core.provider.SocialProviderRepository;
-
 /**
- *
  * @author bojiangzhou 2019/09/01
  */
 public class CustomSocialProviderRepository extends SocialProviderRepository {
 
     @Autowired
     private BaseOpenAppRepository baseOpenAppRepository;
+
+    @Autowired
+    public void setDataSecurityKeyService(DataSecurityKeyService dataSecurityKeyService) {
+        // 处理在组件加载时，DataSecurityInterceptor的DataSecurityKeyService为空的问题
+        DataSecurityInterceptor.setDataSecurityKeyService(dataSecurityKeyService);
+    }
 
     @Override
     public List<Provider> getProvider(String providerId) {

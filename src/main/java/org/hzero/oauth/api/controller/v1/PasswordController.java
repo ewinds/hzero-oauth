@@ -1,5 +1,6 @@
 package org.hzero.oauth.api.controller.v1;
 
+import io.choerodon.core.exception.CommonException;
 import io.swagger.annotations.ApiParam;
 import org.apache.commons.lang3.StringUtils;
 import org.hzero.core.base.BaseConstants;
@@ -17,9 +18,11 @@ import org.hzero.oauth.domain.entity.User;
 import org.hzero.oauth.domain.repository.UserRepository;
 import org.hzero.oauth.domain.service.PasswordService;
 import org.hzero.oauth.domain.service.UserCaptchaService;
+import org.hzero.oauth.domain.vo.MobileCaptchaVerifyVO;
 import org.hzero.oauth.infra.constant.Constants;
 import org.hzero.oauth.infra.encrypt.EncryptClient;
 import org.hzero.oauth.security.constant.SecurityAttributes;
+import org.hzero.oauth.security.util.LoginUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,10 +93,10 @@ public class PasswordController extends BaseController {
         session.removeAttribute(RESET_ACCOUNT_CROWN);
 
         if (StringUtils.isBlank(account)) {
-            return Results.success(new Result(false, ERROR_ACCOUNT, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotnull").desc()));
+            return Results.success(new Result(false, ERROR_ACCOUNT, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotnull", LoginUtil.getLanguageLocale()).desc()));
         }
         if (StringUtils.isBlank(captcha)) {
-            return Results.success(new Result(false, ERROR_CAPTCHA, MessageAccessor.getMessage("hoth.warn.captchaNotnull").desc()));
+            return Results.success(new Result(false, ERROR_CAPTCHA, MessageAccessor.getMessage("hoth.warn.captchaNotnull", LoginUtil.getLanguageLocale()).desc()));
         }
         CaptchaResult captchaResult = captchaImageHelper.checkCaptcha(request, captcha, Constants.APP_CODE);
         if (!captchaResult.isSuccess()) {
@@ -102,10 +105,10 @@ public class PasswordController extends BaseController {
 
         User user = userRepository.selectUserByPhoneOrEmail(account, UserType.ofDefault());
         if (user == null) {
-            return Results.success(new Result(false, ERROR_ACCOUNT, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotFound").desc()));
+            return Results.success(new Result(false, ERROR_ACCOUNT, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotFound", LoginUtil.getLanguageLocale()).desc()));
         }
         if (user.getLdap()) {
-            return Results.success(new Result(false, ERROR_ACCOUNT, MessageAccessor.getMessage("hoth.warn.ldapCannotChangePassword").desc()));
+            return Results.success(new Result(false, ERROR_ACCOUNT, MessageAccessor.getMessage("hoth.warn.ldapCannotChangePassword", LoginUtil.getLanguageLocale()).desc()));
         }
         // 用户名和组织Id 用于获取密码校验规则
         Map<String, Object> map = new HashMap<>();
@@ -130,7 +133,7 @@ public class PasswordController extends BaseController {
         String account = (String) session.getAttribute(RESET_ACCOUNT);
         String internationalTelCode = (String) session.getAttribute(RESET_ACCOUNT_CROWN);
         if (StringUtils.isBlank(account)) {
-            return Results.success(new Result(false, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotnull").desc()));
+            return Results.success(new Result(false, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotnull", LoginUtil.getLanguageLocale()).desc()));
         }
 
         CaptchaResult captchaResult = null;
@@ -139,7 +142,7 @@ public class PasswordController extends BaseController {
         } else if (Regexs.isMobile(account)) {
             captchaResult = userCaptchaService.sendPhoneCaptcha(internationalTelCode, account, UserType.ofDefault(userType), businessScope);
         } else {
-            return Results.success(new Result(false, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotInvalid").desc()));
+            return Results.success(new Result(false, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotInvalid", LoginUtil.getLanguageLocale()).desc()));
         }
 
         Result result = new Result(captchaResult.isSuccess(), captchaResult.getCode(), captchaResult.getMessage());
@@ -159,7 +162,7 @@ public class PasswordController extends BaseController {
             @RequestParam(required = false) String businessScope) {
         String account = (String) session.getAttribute(RESET_ACCOUNT);
         if (StringUtils.isBlank(account)) {
-            return Results.success(new Result(false, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotnull").desc()));
+            return Results.success(new Result(false, MessageAccessor.getMessage("hoth.warn.phoneOrEmailNotnull", LoginUtil.getLanguageLocale()).desc()));
         }
 
         password = encryptClient.decrypt(password);
@@ -169,8 +172,12 @@ public class PasswordController extends BaseController {
             LOGGER.warn("update password error. e={}", e.getMessage());
             if (e instanceof MessageException) {
                 return Results.success(new Result(false, ((MessageException) e).getCode(), e.getMessage()));
+            } else if (e instanceof CommonException) {
+                CommonException commonException = (CommonException) e;
+                return Results.success(new Result(false, commonException.getMessage(),
+                        MessageAccessor.getMessage(commonException.getCode(), commonException.getParameters(), LoginUtil.getLanguageLocale()).desc()));
             } else {
-                return Results.success(new Result(false, e.getMessage(), MessageAccessor.getMessage(e.getMessage()).desc()));
+                return Results.success(new Result(false, e.getMessage(), MessageAccessor.getMessage(e.getMessage(), LoginUtil.getLanguageLocale()).desc()));
             }
         }
 
@@ -183,19 +190,26 @@ public class PasswordController extends BaseController {
     @PostMapping("/force-modify")
     @ResponseBody
     public ResponseEntity<Result> forceModifyPassword(HttpSession session, String password,
-                                                      @RequestParam(required = false) String userType) {
+                                                      MobileCaptchaVerifyVO verifyVO) {
         Long userId = (Long) session.getAttribute(SecurityAttributes.SECURITY_LOGIN_USER_ID);
 
         if (null == userId) {
             // session 内容为空  无法强制修改密码参数
-            return Results.success(new Result(false, MessageAccessor.getMessage("hoth.warn.sessionUserNull").desc()));
+            return Results.success(new Result(false, MessageAccessor.getMessage("hoth.warn.sessionUserNull", LoginUtil.getLanguageLocale()).desc()));
+        }
+        String phone = (String) session.getAttribute(SecurityAttributes.SECURITY_LOGIN_MOBILE);
+        if (StringUtils.isNotBlank(phone)) {
+            verifyVO.setPhone(phone);
         }
         password = encryptClient.decrypt(password);
         try {
-            passwordService.updatePasswordByUser(userId, UserType.ofDefault(userType), password);
+            passwordService.updatePasswordByUser(userId, UserType.ofDefault(verifyVO.getUserType()), password, verifyVO);
+            // 清理数据
+            session.removeAttribute(SecurityAttributes.SECURITY_FORCE_CODE_VERIFY);
+            session.removeAttribute(SecurityAttributes.SECURITY_LOGIN_MOBILE);
         } catch (Exception e) {
             LOGGER.error("modify password error.", e);
-            return Results.success(new Result(false, e.getMessage(), MessageAccessor.getMessage(e.getMessage()).desc()));
+            return Results.success(new Result(false, e.getMessage(), MessageAccessor.getMessage(e.getMessage(), LoginUtil.getLanguageLocale()).desc()));
         }
         return Results.success(new Result(true));
     }

@@ -1,7 +1,7 @@
 package org.hzero.oauth.domain.service;
 
 import org.hzero.core.user.UserType;
-import org.hzero.oauth.domain.entity.User;
+import org.hzero.oauth.domain.vo.MobileCaptchaVerifyVO;
 
 /**
  * 密码服务
@@ -29,6 +29,7 @@ public interface PasswordService {
      * @param userId   用户Id
      * @param userType 用户类型
      * @param password 密码
+     * @param verifyVO 手机验证码校验参数对象
      */
-    void updatePasswordByUser(Long userId, UserType userType, String password);
+    void updatePasswordByUser(Long userId, UserType userType, String password, MobileCaptchaVerifyVO verifyVO);
 }

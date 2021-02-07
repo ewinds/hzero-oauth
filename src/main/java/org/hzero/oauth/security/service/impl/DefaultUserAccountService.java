@@ -226,7 +226,7 @@ public class DefaultUserAccountService implements UserAccountService {
             return;
         }
         // 校验是否有分配角色
-        if (userRepository.countUserMemberRole(user.getId()) == 0) {
+        if (CollectionUtils.isEmpty(user.getRoles())) {
             throw new AuthenticationServiceException(LoginExceptions.ROLE_NONE.value());
         }
     }

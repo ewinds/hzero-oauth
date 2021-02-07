@@ -20,9 +20,9 @@ import org.hzero.starter.social.core.security.SocialUserDetailsService;
 public class CustomSocialUserDetailsService implements SocialUserDetailsService {
     private static final Logger LOGGER = LoggerFactory.getLogger(CustomSocialUserDetailsService.class);
 
-    private UserAccountService userAccountService;
-    private UserDetailsBuilder userDetailsBuilder;
-    private LoginRecordService loginRecordService;
+    private final UserAccountService userAccountService;
+    private final UserDetailsBuilder userDetailsBuilder;
+    private final LoginRecordService loginRecordService;
 
     public CustomSocialUserDetailsService(UserAccountService userAccountService,
                                     UserDetailsBuilder userDetailsBuilder,
@@ -40,6 +40,9 @@ public class CustomSocialUserDetailsService implements SocialUserDetailsService 
             if (user == null) {
                 throw new CustomAuthenticationException(LoginExceptions.USERNAME_OR_PASSWORD_ERROR.value());
             }
+
+            userAccountService.checkLoginUser(user);
+
             getLoginRecordService().saveLocalLoginUser(user);
         }
         LOGGER.debug("load custom user, username={}", username);

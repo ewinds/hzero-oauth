@@ -1,6 +1,7 @@
 package org.hzero.oauth.infra.mapper;
 
 import java.util.List;
+import java.util.Set;
 
 import org.apache.ibatis.annotations.Param;
 
@@ -58,4 +59,8 @@ public interface UserPlusMapper extends BaseMapper<User> {
      */
     List<Long> selectUserRole(@Param("userId") Long userId);
 
+    /**
+     * 查询角色标签
+     */
+    Set<String> selectRoleLabels(@Param("roleIds") List<Long> roleIds);
 }

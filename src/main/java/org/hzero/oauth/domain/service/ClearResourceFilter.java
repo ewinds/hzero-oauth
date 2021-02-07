@@ -1,3 +1,4 @@
+
 package org.hzero.oauth.domain.service;
 
 import java.io.IOException;
@@ -31,10 +32,14 @@ public class ClearResourceFilter implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         try {
             chain.doFilter(request, response);
-        } catch(Exception e) {
-            LOGGER.debug("Security Filter error. exception is {}", e.getMessage());
+        } catch (Throwable e) {
+            LOGGER.error("clear resource filters error", e);
         } finally {
-            clearResourceService.cleaningResource();
+            try {
+                clearResourceService.cleaningResource();
+            } catch (Throwable e) {
+                LOGGER.error("clear resource error", e);
+            }
         }
     }
 

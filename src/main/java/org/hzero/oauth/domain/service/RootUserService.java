@@ -1,11 +1,12 @@
 package org.hzero.oauth.domain.service;
 
 import org.apache.commons.lang3.BooleanUtils;
-import org.springframework.core.env.Environment;
 
 import io.choerodon.core.convertor.ApplicationContextHelper;
 import io.choerodon.core.oauth.CustomUserDetails;
 import io.choerodon.core.oauth.DetailsHelper;
+
+import org.hzero.boot.oauth.config.BootOauthProperties;
 
 /**
  * Root 用户服务
@@ -14,7 +15,7 @@ import io.choerodon.core.oauth.DetailsHelper;
  */
 public class RootUserService {
 
-    private static final String ROOT_CONFIG_KEY = "hzero.user.enable-root";
+    private static BootOauthProperties properties;
 
     /**
      * If enabled root func ( config key <i>hzero.user.enable-root=true</i> ), and current user is admin, then return true, otherwise return false.
@@ -41,9 +42,13 @@ public class RootUserService {
             return false;
         }
 
-        Environment env = ApplicationContextHelper.getContext().getBean(Environment.class);
+        if (properties == null) {
+            synchronized (RootUserService.class) {
+                properties = ApplicationContextHelper.getContext().getBean(BootOauthProperties.class);
+            }
+        }
 
-        return env.getProperty(ROOT_CONFIG_KEY, Boolean.class, false);
+        return properties.getUser().isEnableRoot();
     }
 
 }

@@ -18,8 +18,9 @@ import java.security.Principal;
 import java.util.*;
 import javax.servlet.http.HttpServletRequest;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeansException;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
@@ -52,7 +53,7 @@ import org.springframework.web.servlet.view.RedirectView;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import org.hzero.oauth.security.custom.processor.authorize.AuthorizeSuccessProcessor;
+import org.hzero.oauth.security.event.AuthorizeEvent;
 
 /**
  * <p>
@@ -73,7 +74,7 @@ import org.hzero.oauth.security.custom.processor.authorize.AuthorizeSuccessProce
  */
 @FrameworkEndpoint
 @SessionAttributes("authorizationRequest")
-public class AuthorizationEndpoint extends AbstractEndpoint {
+public class AuthorizationEndpoint extends AbstractEndpoint implements ApplicationContextAware {
 
 	private AuthorizationCodeServices authorizationCodeServices = new InMemoryAuthorizationCodeServices();
 
@@ -85,15 +86,13 @@ public class AuthorizationEndpoint extends AbstractEndpoint {
 
 	private OAuth2RequestValidator oauth2RequestValidator = new DefaultOAuth2RequestValidator();
 
-	private List<AuthorizeSuccessProcessor> authorizeSuccessProcessors = Collections.emptyList();
+	private ApplicationContext applicationContext;
 
 	private String userApprovalPage = "forward:/oauth/confirm_access";
 
 	private String errorPage = "forward:/oauth/error";
 
 	private Object implicitLock = new Object();
-
-	private static final Logger LOGGER = LoggerFactory.getLogger(AuthorizationEndpoint.class);
 
 	public void setSessionAttributeStore(SessionAttributeStore sessionAttributeStore) {
 		this.sessionAttributeStore = sessionAttributeStore;
@@ -250,14 +249,8 @@ public class AuthorizationEndpoint extends AbstractEndpoint {
 			Assert.notNull(attributes, "request attributes is null.");
 			HttpServletRequest request = attributes.getRequest();
 
-			for (AuthorizeSuccessProcessor processor : authorizeSuccessProcessors) {
-				try {
-					processor.process(request, null, authorizationRequest, accessToken);
-				} catch (Exception e) {
-					LOGGER.error("authorize processor error, processor is {}, ex={}",
-							processor.getClass().getSimpleName(), e.getMessage(), e);
-				}
-			}
+			AuthorizeEvent authorizeEvent = new AuthorizeEvent(request, authorizationRequest, accessToken);
+			applicationContext.publishEvent(authorizeEvent);
 
 			return new ModelAndView(new RedirectView(appendAccessToken(authorizationRequest, accessToken), false, true,
 					false));
@@ -479,12 +472,6 @@ public class AuthorizationEndpoint extends AbstractEndpoint {
 		this.oauth2RequestValidator = oauth2RequestValidator;
 	}
 
-	public void setAuthorizeSuccessProcessors(List<AuthorizeSuccessProcessor> authorizeSuccessProcessors) {
-		Assert.notNull(authorizeSuccessProcessors, "authorize success processor should not be null.");
-		this.authorizeSuccessProcessors = authorizeSuccessProcessors;
-		this.authorizeSuccessProcessors.sort(Comparator.comparingInt(AuthorizeSuccessProcessor::getOrder));
-	}
-
 	@SuppressWarnings("deprecation")
 	public void setImplicitGrantService(
 			org.springframework.security.oauth2.provider.implicit.ImplicitGrantService implicitGrantService) {
@@ -564,5 +551,10 @@ public class AuthorizationEndpoint extends AbstractEndpoint {
 			return getDefaultOAuth2RequestFactory().createAuthorizationRequest(parameters);
 		}
 
+	}
+
+	@Override
+	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+		this.applicationContext = applicationContext;
 	}
 }

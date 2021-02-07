@@ -13,10 +13,19 @@ public interface UserDetailsBuilder {
 
     /**
      * 构建 CustomUserDetails
-     * 
+     *
      * @param user User
      * @return CustomUserDetails
      */
     CustomUserDetails buildUserDetails(User user);
+
+    /**
+     * 构建 CustomUserDetails
+     *
+     * @param user     User
+     * @param tenantId 当前租户ID
+     * @return CustomUserDetails
+     */
+    CustomUserDetails buildUserDetails(User user, Long tenantId);
 
 }

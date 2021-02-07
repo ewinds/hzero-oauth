@@ -1,13 +1,13 @@
 package org.hzero.oauth.security.sms.config;
 
-import org.hzero.oauth.domain.service.AuditLoginService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.core.userdetails.UserDetailsService;
 
 import org.hzero.core.captcha.CaptchaMessageHelper;
+import org.hzero.oauth.domain.service.AuditLoginService;
 import org.hzero.oauth.security.config.SecurityProperties;
-import org.hzero.oauth.security.custom.CustomUserDetailsService;
 import org.hzero.oauth.security.service.LoginRecordService;
 import org.hzero.oauth.security.service.UserAccountService;
 import org.hzero.oauth.security.sms.SmsAuthenticationDetailsSource;
@@ -23,7 +23,7 @@ import org.hzero.oauth.security.sms.SmsAuthenticationProvider;
 public class SmsLoginConfiguration {
 
     @Autowired
-    private CustomUserDetailsService userDetailsService;
+    private UserDetailsService userDetailsService;
     @Autowired
     private CaptchaMessageHelper captchaMessageHelper;
     @Autowired

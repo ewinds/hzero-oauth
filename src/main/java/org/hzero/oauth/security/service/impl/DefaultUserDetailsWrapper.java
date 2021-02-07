@@ -20,6 +20,7 @@ import org.hzero.oauth.domain.repository.UserRepository;
 import org.hzero.oauth.domain.service.RootUserService;
 import org.hzero.oauth.domain.vo.Role;
 import org.hzero.oauth.domain.vo.UserRoleDetails;
+import org.hzero.oauth.domain.vo.UserVO;
 import org.hzero.oauth.security.exception.LoginExceptions;
 import org.hzero.oauth.security.service.UserDetailsWrapper;
 
@@ -31,6 +32,7 @@ import org.hzero.oauth.security.service.UserDetailsWrapper;
 public class DefaultUserDetailsWrapper implements UserDetailsWrapper {
     private static final Logger logger = LoggerFactory.getLogger(DefaultUserDetailsWrapper.class);
     private static final String ROLE_MERGE_PREFIX = "hpfm:config:ROLE_MERGE.";
+    private static final String TENANT_DEFAULT_LANGUAGE = "TENANT_DEFAULT_LANGUAGE";
 
     private UserRepository userRepository;
     private RedisHelper redisHelper;
@@ -115,8 +117,29 @@ public class DefaultUserDetailsWrapper implements UserDetailsWrapper {
         if (CollectionUtils.isEmpty(details.getRoleIds())) {
             logger.warn("User not assign any role! userId: {}", details.getUserId());
         }
+        // 设置当前环境语言
+        if (StringUtils.isBlank(details.getLanguage())) {
+            // 设置租户默认语言，解决UserDetail对象语言为空问题
+            SafeRedisHelper.execute(HZeroService.Platform.REDIS_DB, () ->{
+                String lang = redisHelper.strGet(UserVO.generateCacheKey(TENANT_DEFAULT_LANGUAGE, details.getTenantId()));
+                if (StringUtils.isBlank(lang)) {
+                    lang = redisHelper.strGet(UserVO.generateCacheKey(TENANT_DEFAULT_LANGUAGE, BaseConstants.DEFAULT_TENANT_ID));
+                }
+                details.setLanguage(lang);
+            });
+        }
+
+        warpRoleInfo(details, details.getRoleId());
 
         logger.debug(">>>>> After warp[{},{}] : {}", userId, tenantId, details);
+    }
+
+    @Override
+    public void warpRoleInfo(CustomUserDetails details, Long roleId) {
+        details.setRoleId(roleId);
+        // 设置角色标签
+        Set<String> labels = Optional.ofNullable(userRepository.selectRoleLabels(details.roleMergeIds())).orElse(new HashSet<>(0));
+        details.setRoleLabels(labels);
     }
 
     protected List<UserRoleDetails> selectUserRoles(CustomUserDetails details, Long tenantId) {

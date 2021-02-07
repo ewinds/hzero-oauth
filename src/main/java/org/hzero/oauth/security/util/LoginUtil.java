@@ -1,8 +1,10 @@
 package org.hzero.oauth.security.util;
 
+import java.util.Locale;
 import java.util.Map;
 
 import org.apache.commons.collections4.MapUtils;
+import org.apache.commons.lang3.LocaleUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.oauth2.provider.OAuth2Authentication;
@@ -14,9 +16,11 @@ import io.choerodon.core.oauth.CustomUserDetails;
 
 import org.hzero.boot.oauth.domain.entity.BasePasswordPolicy;
 import org.hzero.boot.oauth.domain.repository.BasePasswordPolicyRepository;
+import org.hzero.core.helper.LanguageHelper;
 import org.hzero.core.user.UserType;
 import org.hzero.oauth.security.config.SecurityProperties;
 import org.hzero.oauth.security.constant.LoginSource;
+import org.hzero.oauth.security.constant.SecurityAttributes;
 
 /**
  * login util.
@@ -38,6 +42,8 @@ public class LoginUtil {
     public static final String FIELD_CAPTCHA_KEY = "captchaKey";
     public static final String FIELD_PUBLIC_KEY = "publicKey";
     public static final String FIELD_ACCESS_TOKEN = "access_token";
+    public static final String FIELD_PASSWORD_ENCRYPT = "passwordEncrypt";
+    public static final String FIELD_ACCOUNT_ENCRYPT = "accountEncrypt";
 
     public static final String FIELD_LOGO_URL = "logoUrl";
     public static final String FIELD_TITLE = "systemTitle";
@@ -72,7 +78,7 @@ public class LoginUtil {
 
     /**
      * 判断是否是移动设备登录
-     * 
+     *
      * @param authentication OAuth2Authentication
      * @return true
      */
@@ -84,7 +90,7 @@ public class LoginUtil {
         Map<String, String> parameters = auth2Request.getRequestParameters();
 
         return parameters.containsKey(LOGIN_SOURCE_TYPE_KEY)
-                        && StringUtils.equalsIgnoreCase(parameters.get(LOGIN_SOURCE_TYPE_KEY), LoginSource.APP.name());
+                && StringUtils.equalsIgnoreCase(parameters.get(LOGIN_SOURCE_TYPE_KEY), LoginSource.APP.name());
     }
 
     public boolean isWebDeviceLogin(OAuth2Authentication authentication) {
@@ -135,6 +141,24 @@ public class LoginUtil {
     private boolean computeBoolean(Boolean pack) {
         // 默认 true
         return pack == null ? true : pack;
+    }
+
+    /**
+     * 获取当前语言
+     *
+     * @return Locale
+     */
+    public static Locale getLanguageLocale() {
+        return LocaleUtils.toLocale(getLanguage());
+    }
+
+    /**
+     * 获取当前语言
+     *
+     * @return lang
+     */
+    public static String getLanguage() {
+        return RequestUtil.getParameterValueFromRequestOrSavedRequest(SecurityAttributes.FIELD_LANG, LanguageHelper.language());
     }
 
 }

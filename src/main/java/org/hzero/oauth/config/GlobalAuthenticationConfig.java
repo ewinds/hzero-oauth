@@ -21,4 +21,6 @@ public class GlobalAuthenticationConfig extends GlobalAuthenticationConfigurerAd
     public void init(AuthenticationManagerBuilder auth) throws Exception {
         auth.authenticationProvider(customAuthenticationProvider);
     }
+
+
 }

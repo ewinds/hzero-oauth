@@ -11,4 +11,9 @@ public interface UserDetailsWrapper {
 
     void warp(CustomUserDetails details, Long userId, Long tenantId, boolean login);
 
+    /**
+     * 只更新角色信息
+     */
+    default void warpRoleInfo(CustomUserDetails details, Long roleId) {
+    }
 }

@@ -1,12 +1,13 @@
 package org.hzero.oauth.security.sms;
 
+import java.util.Objects;
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.security.web.authentication.WebAuthenticationDetails;
+
 import org.hzero.core.captcha.CaptchaResult;
 import org.hzero.core.user.UserType;
 import org.hzero.oauth.security.util.RequestUtil;
-import org.springframework.security.web.authentication.WebAuthenticationDetails;
-
-import javax.servlet.http.HttpServletRequest;
-import java.util.Objects;
 
 /**
  * 封装短信验证码
@@ -14,6 +15,7 @@ import java.util.Objects;
  * @author bojiangzhou 2019/02/25
  */
 public class SmsAuthenticationDetails extends WebAuthenticationDetails {
+    private static final long serialVersionUID = 3660248343605392800L;
 
     private String inputCaptcha;
     private String captchaKey;

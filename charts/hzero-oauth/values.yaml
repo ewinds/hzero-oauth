@@ -36,8 +36,8 @@ env:
     HZERO_OAUTH_ENABLE_ALWAYS_CAPTCHA: false
     # client_credentials 模式是否返回 refresh_token
     HZERO_OAUTH_CREDENTIALS_ALLOW_REFRESH: false
-    #网关是否启用https
-    HZERO_OAUTH_LOGIN_ENABLE_HTTPS: false
+    # 是否检查redirect_uri的一致性
+    HZERO_OAUTH_CHECK_REDIRECT_URI: true
     # 允许使用的登录名，默认有 用户名、邮箱、手机号
     HZERO_OAUTH_LOGIN_SUPPORT_FIELDS: username,email,phone
     # 前端默认模板
@@ -48,16 +48,14 @@ env:
     HZERO_OAUTH_LOGIN_PASS_REPLAY_EXPIRE: 30
     # 默认客户端
     HZERO_OAUTH_LOGIN_DEFAULT_CLIENT_ID: hzero-front-dev
+    # 登录密码是否加密传输
+    HZERO_OAUTH_LOGIN_PASSWORD_ENCRYPT: true
+    # 登录账号是否加密传输
+    HZERO_OAUTH_LOGIN_ACCOUNT_ENCRYPT: false
     # oauth服务基础地址
     HZERO_OAUTH_BASE_URL: http://dev.hzero.org:8080/oauth
-    # 退出时是否清理token
-    HZERO_OAUTH_LOGOUT_CLEAR_TOKEN: true
-    # 启用二级域名单点登录
-    HZERO_OAUTH_SSO_ENABLED: true
-    # 用于cas
-    HZERO_OAUTH_SSO_PROVIDER_KEY: hzero
-    # 二级域名单点登录地址
-    HZERO_OAUTH_SSO_SERVICE_BASE_URL: http://dev.hzero.org:8080/oauth
+    # 是否启用兼容模式，兼容老版本跳转地址
+    HZERO_OAUTH_SSO_ENABLE_COMPATIBILITY_MODE: false
     # 数据库所有者模式，例如 SqlServer 下的 dbo/guest
     HZERO_DB_OWNER:
     # Eureka 注册中心地址

@@ -1,6 +1,5 @@
 package org.hzero.oauth.security.token;
 
-import java.util.List;
 import java.util.Set;
 import javax.servlet.http.HttpServletRequest;
 
@@ -21,7 +20,6 @@ import org.springframework.social.security.SocialAuthenticationToken;
 import org.springframework.social.security.provider.SocialAuthenticationService;
 import org.springframework.util.Assert;
 
-import org.hzero.oauth.security.custom.processor.authorize.AuthorizeSuccessProcessor;
 import org.hzero.starter.social.core.common.constant.ChannelEnum;
 import org.hzero.starter.social.core.common.constant.SocialConstant;
 import org.hzero.starter.social.core.exception.CommonSocialException;
@@ -36,16 +34,15 @@ import org.hzero.starter.social.core.provider.SocialProviderRepository;
 public class OpenLoginTokenService extends LoginTokenService implements ApplicationContextAware {
 
     private SocialAuthenticationServiceLocator authServiceLocator;
-    private SocialProviderRepository socialProviderRepository;
+    private final SocialProviderRepository socialProviderRepository;
     private ApplicationContext applicationContext;
 
     public OpenLoginTokenService(TokenGranter tokenGranter,
                                  ClientDetailsService clientDetailsService,
                                  OAuth2RequestFactory oAuth2RequestFactory,
                                  AuthenticationProvider authenticationProvider,
-                                 SocialProviderRepository socialProviderRepository,
-                                 List<AuthorizeSuccessProcessor> authorizeSuccessProcessors) {
-        super(tokenGranter, clientDetailsService, oAuth2RequestFactory, authenticationProvider, authorizeSuccessProcessors);
+                                 SocialProviderRepository socialProviderRepository) {
+        super(tokenGranter, clientDetailsService, oAuth2RequestFactory, authenticationProvider);
         this.socialProviderRepository = socialProviderRepository;
     }
 

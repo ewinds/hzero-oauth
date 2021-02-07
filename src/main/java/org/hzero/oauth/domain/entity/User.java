@@ -3,15 +3,18 @@ package org.hzero.oauth.domain.entity;
 import java.io.Serializable;
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.List;
 import javax.persistence.*;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.apache.commons.lang3.BooleanUtils;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import io.choerodon.mybatis.annotation.ModifyAudit;
 import io.choerodon.mybatis.annotation.VersionAudit;
 import io.choerodon.mybatis.domain.AuditDomain;
 
+import org.hzero.oauth.domain.vo.Role;
 import org.hzero.oauth.security.constant.LoginField;
 
 @ModifyAudit
@@ -25,6 +28,8 @@ public class User extends AuditDomain implements Serializable {
     public static final String FIELD_LOCKED_DATE = "locked_date";
     public static final String FIELD_LOCKED_UNTIL_AT = "lockedUntilAt";
     public static final String FIELD_LAST_PASSWORD_UPDATED_AT = "lastPasswordUpdatedAt";
+    public static final String FIELD_ENABLE_SECONDARY_CHECK = "enableSecondaryCheck";
+    public static final String FIELD_PHONE = "phone";
 
     /**
      * 线程安全的，放心用
@@ -123,6 +128,14 @@ public class User extends AuditDomain implements Serializable {
     private Long regionId;
     @Transient
     private Integer passwordResetFlag;
+    @Transient
+    private Boolean secCheckPhoneFlag;
+    @Transient
+    private Boolean secCheckEmailFlag;
+
+    @Transient
+    @JsonIgnore
+    private transient List<Role> roles;
 
     //
     // 额外查询字段
@@ -141,7 +154,7 @@ public class User extends AuditDomain implements Serializable {
      */
     @Transient
     @JsonIgnore
-    private LoginField loginField;
+    private transient LoginField loginField;
 
 
     public User() {
@@ -459,5 +472,39 @@ public class User extends AuditDomain implements Serializable {
 
     public void setPasswordResetFlag(Integer passwordResetFlag) {
         this.passwordResetFlag = passwordResetFlag;
+    }
+
+    public Boolean getSecCheckPhoneFlag() {
+        return secCheckPhoneFlag;
+    }
+
+    public void setSecCheckPhoneFlag(Boolean secCheckPhoneFlag) {
+        this.secCheckPhoneFlag = secCheckPhoneFlag;
+    }
+
+    public Boolean getSecCheckEmailFlag() {
+        return secCheckEmailFlag;
+    }
+
+    public void setSecCheckEmailFlag(Boolean secCheckEmailFlag) {
+        this.secCheckEmailFlag = secCheckEmailFlag;
+    }
+
+    public List<Role> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(List<Role> roles) {
+        this.roles = roles;
+    }
+
+    /**
+     * 判断当前用户是否开启了二次校验
+     *
+     * @return true 开启了二次校验 false 未开启二次校验
+     */
+    public boolean isOpenSecCheck() {
+        // 只要二次校验手机标识和二次校验邮箱校验开启了一个，就认为开启了二次校验
+        return BooleanUtils.isTrue(this.secCheckPhoneFlag) || BooleanUtils.isTrue(this.secCheckEmailFlag);
     }
 }

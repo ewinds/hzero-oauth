@@ -24,6 +24,7 @@ import org.springframework.web.util.HtmlUtils;
 import org.hzero.core.message.MessageAccessor;
 import org.hzero.oauth.security.exception.CustomAuthenticationException;
 import org.hzero.oauth.security.exception.ErrorWithTimesException;
+import org.hzero.oauth.security.util.LoginUtil;
 
 /**
  *
@@ -68,7 +69,7 @@ public class OAuth2ExceptionJackson2Serializer extends StdSerializer<OAuth2Excep
 			jgen.writeStringField("errorTimes", String.valueOf(ex.getErrorTimes()));
 			jgen.writeStringField("surplusTimes", String.valueOf(ex.getSurplusTimes()));
 		}
-		jgen.writeStringField("message", MessageAccessor.getMessage(errorMessage, parameters).desc());
+		jgen.writeStringField("message", MessageAccessor.getMessage(errorMessage, parameters, LoginUtil.getLanguageLocale()).desc());
         jgen.writeEndObject();
 	}
 

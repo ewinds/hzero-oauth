@@ -1,19 +1,8 @@
 package org.hzero.oauth.security.sms;
 
+import java.util.Map;
+
 import org.apache.commons.lang3.StringUtils;
-import org.hzero.common.HZeroService;
-import org.hzero.core.captcha.CaptchaMessageHelper;
-import org.hzero.core.captcha.CaptchaResult;
-import org.hzero.core.user.UserType;
-import org.hzero.oauth.domain.entity.User;
-import org.hzero.oauth.security.constant.LoginType;
-import org.hzero.oauth.security.custom.CustomUserDetailsService;
-import org.hzero.oauth.security.exception.AccountNotExistsException;
-import org.hzero.oauth.security.exception.CustomAuthenticationException;
-import org.hzero.oauth.security.exception.ErrorWithTimesException;
-import org.hzero.oauth.security.exception.LoginExceptions;
-import org.hzero.oauth.security.service.LoginRecordService;
-import org.hzero.oauth.security.service.UserAccountService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -27,7 +16,18 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.util.Assert;
 
-import java.util.Map;
+import org.hzero.common.HZeroService;
+import org.hzero.core.captcha.CaptchaMessageHelper;
+import org.hzero.core.captcha.CaptchaResult;
+import org.hzero.core.user.UserType;
+import org.hzero.oauth.domain.entity.User;
+import org.hzero.oauth.security.constant.LoginType;
+import org.hzero.oauth.security.exception.AccountNotExistsException;
+import org.hzero.oauth.security.exception.CustomAuthenticationException;
+import org.hzero.oauth.security.exception.ErrorWithTimesException;
+import org.hzero.oauth.security.exception.LoginExceptions;
+import org.hzero.oauth.security.service.LoginRecordService;
+import org.hzero.oauth.security.service.UserAccountService;
 
 /**
  * 短信登录认证器
@@ -40,14 +40,14 @@ public class SmsAuthenticationProvider implements AuthenticationProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SmsAuthenticationProvider.class);
 
-    private GrantedAuthoritiesMapper authoritiesMapper = new NullAuthoritiesMapper();
+    private final GrantedAuthoritiesMapper authoritiesMapper = new NullAuthoritiesMapper();
 
-    private CustomUserDetailsService userDetailsService;
-    private CaptchaMessageHelper captchaMessageHelper;
-    private UserAccountService userAccountService;
-    private LoginRecordService loginRecordService;
+    private final UserDetailsService userDetailsService;
+    private final CaptchaMessageHelper captchaMessageHelper;
+    private final UserAccountService userAccountService;
+    private final LoginRecordService loginRecordService;
 
-    public SmsAuthenticationProvider(CustomUserDetailsService userDetailsService,
+    public SmsAuthenticationProvider(UserDetailsService userDetailsService,
                                      CaptchaMessageHelper captchaMessageHelper,
                                      UserAccountService userAccountService,
                                      LoginRecordService loginRecordService) {
@@ -64,6 +64,8 @@ public class SmsAuthenticationProvider implements AuthenticationProvider {
 
         String mobile = (authentication.getPrincipal() == null) ? "NONE_PROVIDED" : authentication.getName();
 
+        authenticationVerify((SmsAuthenticationToken) authentication);
+
         UserDetails user = retrieveUser(mobile, (SmsAuthenticationToken) authentication);
         Assert.notNull(user, "retrieveUser returned null - a violation of the interface contract");
 
@@ -77,7 +79,8 @@ public class SmsAuthenticationProvider implements AuthenticationProvider {
         // 获取当前登录用户信息
         User user = userAccountService.findLoginUser(LoginType.SMS, mobile, getUserType(authentication));
         if (user == null) {
-            throw new AccountNotExistsException(LoginExceptions.PHONE_NOT_FOUND.value());
+            LOGGER.info("Sms authentication failure, user not found by mobile: [{}]", mobile);
+            throw new AccountNotExistsException(LoginExceptions.LOGIN_MOBILE_CAPTCHA_NULL.value());
         }
 
         loginRecordService.saveLocalLoginUser(user);
@@ -88,8 +91,7 @@ public class SmsAuthenticationProvider implements AuthenticationProvider {
         return getUserDetailsService().loadUserByUsername(mobile);
     }
 
-    protected void additionalAuthenticationChecks(UserDetails userDetails, SmsAuthenticationToken authentication)
-            throws AuthenticationException {
+    protected void authenticationVerify(SmsAuthenticationToken authentication) throws AuthenticationException {
         Assert.isInstanceOf(SmsAuthenticationDetails.class, authentication.getDetails());
         SmsAuthenticationDetails details = (SmsAuthenticationDetails) authentication.getDetails();
         String mobile = (authentication.getPrincipal() == null) ? "NONE_PROVIDED" : authentication.getName();
@@ -98,6 +100,7 @@ public class SmsAuthenticationProvider implements AuthenticationProvider {
         String captchaKey = details.getCaptchaKey();
         String businessScope = details.getBusinessScope();
         if (StringUtils.isAnyEmpty(inputCaptcha, captchaKey)) {
+            LOGGER.info("Sms authentication failure, captcha incorrect. mobile: [{}], captcha: [{}]", mobile, inputCaptcha);
             throw new CustomAuthenticationException(LoginExceptions.LOGIN_MOBILE_CAPTCHA_NULL.value());
         }
         CaptchaResult captchaResult = captchaMessageHelper.checkCaptcha(captchaKey, inputCaptcha, mobile, getUserType(authentication),
@@ -112,6 +115,11 @@ public class SmsAuthenticationProvider implements AuthenticationProvider {
         }
     }
 
+    protected void additionalAuthenticationChecks(UserDetails userDetails, SmsAuthenticationToken authentication)
+            throws AuthenticationException {
+
+    }
+
     private UserType getUserType(SmsAuthenticationToken authentication) {
         String userType = null;
         Object details = authentication.getDetails();
@@ -124,9 +132,9 @@ public class SmsAuthenticationProvider implements AuthenticationProvider {
     }
 
     protected Authentication createSuccessAuthentication(Object principal, Authentication authentication, UserDetails user) {
+        // 返回认证结果
         SmsAuthenticationToken result = new SmsAuthenticationToken(principal, authoritiesMapper.mapAuthorities(user.getAuthorities()));
         result.setDetails(authentication.getDetails());
-
         return result;
     }
 

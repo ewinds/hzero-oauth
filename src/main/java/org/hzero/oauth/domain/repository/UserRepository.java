@@ -1,7 +1,7 @@
 package org.hzero.oauth.domain.repository;
 
 import java.util.List;
-
+import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -99,6 +99,11 @@ public interface UserRepository extends BaseRepository<User> {
      */
     List<Long> selectUserRole(Long userId);
 
-
+    /**
+     * 查询角色标签
+     *
+     * @param roleIds 角色ID
+     */
+    Set<String> selectRoleLabels(List<Long> roleIds);
 }
 

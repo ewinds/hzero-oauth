@@ -1,11 +1,13 @@
 package org.hzero.oauth.infra.repository.impl;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-
+import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -159,5 +161,13 @@ public class UserRepositoryImpl extends BaseRepositoryImpl<User> implements User
     @Override
     public List<Long> selectUserRole(Long userId) {
         return userPlusMapper.selectUserRole(userId);
+    }
+
+    @Override
+    public Set<String> selectRoleLabels(List<Long> roleIds) {
+        if (CollectionUtils.isEmpty(roleIds)) {
+            return Collections.emptySet();
+        }
+        return userPlusMapper.selectRoleLabels(roleIds);
     }
 }

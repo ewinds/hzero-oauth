@@ -2,6 +2,7 @@ package org.hzero.oauth.api.controller.v1;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +17,10 @@ import org.springframework.web.bind.annotation.*;
 
 import io.choerodon.core.iam.ResourceLevel;
 import io.choerodon.core.oauth.CustomUserDetails;
+import io.choerodon.core.oauth.DetailsHelper;
 import io.choerodon.swagger.annotation.Permission;
 
+import org.hzero.boot.platform.data.hierarchy.AdditionInfoValueHandler;
 import org.hzero.core.util.Results;
 import org.hzero.oauth.security.custom.CustomRedisTokenStore;
 import org.hzero.oauth.security.service.UserDetailsWrapper;
@@ -38,15 +41,15 @@ public class UserDetailsController {
     private UserDetailsWrapper userDetailsWrapper;
     @Autowired
     private CustomRedisTokenStore customRedisTokenStore;
+    @Autowired(required = false)
+    private List<AdditionInfoValueHandler> additionInfoValueHandlerList;
 
     @ApiOperation("更换用户当前角色")
     @Permission(level = ResourceLevel.SITE, permissionLogin = true, permissionWithin = true)
     @PostMapping("/role-id")
     public ResponseEntity<Void> storeUserRole(@RequestParam("access_token") String accessToken,
-                                              @RequestParam long roleId,
-                                              @RequestParam String assignLevel,
-                                              @RequestParam Long assignValue) {
-        return storeAccessToken(accessToken, customUserDetails -> customUserDetails.setRoleId(roleId));
+                                              @RequestParam long roleId) {
+        return storeAccessToken(accessToken, customUserDetails -> userDetailsWrapper.warpRoleInfo(customUserDetails, roleId));
     }
 
     @ApiOperation("更换用户当前租户")
@@ -104,11 +107,25 @@ public class UserDetailsController {
                                                       @RequestParam String dataHierarchyValue,
                                                       @RequestParam String dataHierarchyMeaning,
                                                       @RequestParam(required = false) List<String> childrenDataHierarchyCodes) {
-        return storeAccessToken(accessToken, customUserDetails ->
-                customUserDetails.addAdditionInfo(dataHierarchyCode, dataHierarchyValue)
-                        .addAdditionMeaning(dataHierarchyCode, dataHierarchyMeaning)
-                        .removeAdditionInfos(childrenDataHierarchyCodes)
-        );
+        AtomicReference<String> dataHierarchyValueReference = new AtomicReference<>(dataHierarchyValue);
+        AtomicReference<String> dataHierarchyMeaningReference = new AtomicReference<>(dataHierarchyMeaning);
+        return storeAccessToken(accessToken, customUserDetails -> {
+            if (!CollectionUtils.isEmpty(this.additionInfoValueHandlerList)) {
+                for (AdditionInfoValueHandler additionInfoValueHandler : additionInfoValueHandlerList) {
+                    String handleValue = additionInfoValueHandler.valueHandler(DetailsHelper.getUserDetails(), dataHierarchyCode, dataHierarchyValueReference.get(), dataHierarchyMeaningReference.get());
+                    if (StringUtils.hasText(handleValue)) {
+                        dataHierarchyValueReference.set(handleValue);
+                    }
+                    String handleMeaning = additionInfoValueHandler.meaningHandler(DetailsHelper.getUserDetails(), dataHierarchyCode, dataHierarchyValueReference.get(), dataHierarchyMeaningReference.get());
+                    if (StringUtils.hasText(handleMeaning)) {
+                        dataHierarchyMeaningReference.set(handleMeaning);
+                    }
+                }
+            }
+            customUserDetails.addAdditionInfo(dataHierarchyCode, dataHierarchyValueReference.get())
+                    .addAdditionMeaning(dataHierarchyCode, dataHierarchyMeaningReference.get())
+                    .removeAdditionInfos(childrenDataHierarchyCodes);
+        });
     }
 
     @SuppressWarnings("Duplicates")

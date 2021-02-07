@@ -5,12 +5,15 @@ package org.hzero.oauth.domain.utils;
  *
  * @author bojiangzhou 2019/10/22
  */
-public enum  ProfileCode {
-
+public enum ProfileCode {
     /**
-     * 消息代码：登录
+     * 消息代码：短信登录
      */
     MSG_CODE_MOBILE_LOGIN(null, "HOTH.MOBILE_LOGIN", "hzero.send-message.mobile-login"),
+    /**
+     * 消息代码：邮箱登录
+     */
+    MSG_CODE_EMAIL_LOGIN(null, "HOTH.EMAIL_LOGIN", "hzero.send-message.email-login"),
     /**
      * 消息代码：修改登录密码
      */
@@ -47,7 +50,7 @@ public enum  ProfileCode {
     private String defaultValue;
     private String configKey;
 
-    ProfileCode (String profileKey, String defaultValue, String configKey) {
+    ProfileCode(String profileKey, String defaultValue, String configKey) {
         this.profileKey = profileKey;
         this.defaultValue = defaultValue;
         this.configKey = configKey;

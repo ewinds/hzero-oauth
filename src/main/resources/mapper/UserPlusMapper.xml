@@ -75,6 +75,45 @@
         <result property="objectVersionNumber" column="object_version_number"/>
     </resultMap>
 
+    <resultMap id="UserMap" type="org.hzero.oauth.domain.entity.User">
+        <id property="id" column="id"/>
+        <result property="loginName" column="login_name"/>
+        <result property="email" column="email"/>
+        <result property="organizationId" column="organization_id"/>
+        <result property="password" column="hash_password"/>
+        <result property="realName" column="real_name"/>
+        <result property="phone" column="phone"/>
+        <result property="language" column="language"/>
+        <result property="enabled" column="is_enabled"/>
+        <result property="locked" column="is_locked"/>
+        <result property="ldap" column="is_ldap"/>
+        <result property="timeZone" column="time_zone"/>
+        <result property="admin" column="is_admin"/>
+        <result property="userType" column="user_type"/>
+        <result property="imageUrl" column="image_url"/>
+        <result property="lockedUntilAt" column="locked_until_at"/>
+        <result property="lastPasswordUpdatedAt" column="last_password_updated_at"/>
+        <result property="internationalTelCode" column="international_tel_code"/>
+        <result property="objectVersionNumber" column="object_version_number"/>
+
+        <result property="startDateActive" column="start_date_active" javaType="java.time.LocalDate"/>
+        <result property="endDateActive" column="end_date_active" javaType="java.time.LocalDate"/>
+        <result property="phoneCheckFlag" column="phone_check_flag"/>
+        <result property="emailCheckFlag" column="email_check_flag"/>
+        <result property="passwordResetFlag" column="password_reset_flag"/>
+        <result property="secCheckPhoneFlag" column="sec_check_phone_flag"/>
+        <result property="secCheckEmailFlag" column="sec_check_email_flag"/>
+
+        <result property="tenantId" column="tenant_id"/>
+        <result property="tenantName" column="tenant_name"/>
+        <result property="tenantEnabledFlag" column="tenant_enabled_flag"/>
+
+        <collection property="roles" ofType="org.hzero.oauth.domain.vo.Role">
+            <result property="id" column="role_id"/>
+            <result property="tenantId" column="role_tenant_id"/>
+        </collection>
+    </resultMap>
+
     <!--  用户详细信息查询基础字段  -->
     <sql id="userDetailsSelectBaseColumn">
         iu.id,
@@ -114,37 +153,54 @@
     </sql>
 
     <!-- 查询登录用户 -->
-    <select id="selectLoginUser" resultType="org.hzero.oauth.domain.entity.User">
+    <select id="selectLoginUser" resultMap="UserMap">
+        <bind name="now" value="@java.time.LocalDate@now()" />
         select
           iu.id,
           iu.login_name,
           iu.email,
           iu.organization_id,
-          iu.hash_password "password",
+          iu.hash_password,
           iu.real_name,
           iu.phone,
           iu.language,
-          iu.is_enabled enabled,
-          iu.is_locked AS locked,
-          iu.is_ldap ldap,
+          iu.is_enabled,
+          iu.is_locked,
+          iu.is_ldap,
           iu.time_zone,
-          iu.locked_until_at,
-          iu.is_admin AS admin,
+          iu.is_admin,
           iu.user_type,
           iu.image_url,
+          iu.locked_until_at,
           iu.last_password_updated_at,
           iu.object_version_number,
+
           hui.end_date_active,
           hui.phone_check_flag,
           hui.email_check_flag,
           hui.password_reset_flag,
-          <!-- 查询租户是否有效 -->
+          hui.sec_check_phone_flag,
+          hui.sec_check_email_flag,
+        <!-- 查询租户是否有效 -->
           ht.tenant_id,
           ht.tenant_name,
-          ht.enabled_flag tenant_enabled_flag
+          ht.enabled_flag tenant_enabled_flag,
+
+          ir.id as role_id,
+          ir.h_tenant_id as role_tenant_id
         from iam_user iu
         join hiam_user_info hui on iu.id = hui.user_id
         left join hpfm_tenant ht on ht.tenant_id = iu.organization_id
+        left join iam_member_role imr on (
+            iu.id = imr.member_id
+            and imr.member_type = 'user'
+            and (imr.start_date_active is null or imr.start_date_active &lt;= #{now})
+            and (imr.end_date_active is null or imr.end_date_active >= #{now})
+        )
+        left join iam_role ir on (
+            ir.id = imr.role_id
+            and ir.is_enabled = 1
+        )
         <where>
             and iu.id > 0
             <if test="id != null">
@@ -154,7 +210,7 @@
                 and iu.login_name = #{loginName}
             </if>
             <if test="email != null and email != ''">
-                and iu.email = #{email}
+                and UPPER(iu.email) = UPPER(#{email})
             </if>
             <if test="phone != null and phone != ''">
                 and iu.phone = #{phone}
@@ -195,7 +251,7 @@
     </select>
 
     <select id="selectRoleDetails" resultMap="RoleDetails">
-        <bind name="now" value="@java.time.LocalDate@now().toString()" />
+        <bind name="now" value="@java.time.LocalDate@now()" />
         SELECT
             hui.default_tenant_id,
             ir.h_tenant_id AS tenant_id,
@@ -283,7 +339,7 @@
     </select>
 
     <select id="countUserMemberRole" resultType="int">
-        <bind name="now" value="@java.time.LocalDate@now().toString()" />
+        <bind name="now" value="@java.time.LocalDate@now()" />
         select
           count(*)
         from iam_user iu
@@ -303,7 +359,7 @@
     </select>
     
     <select id="findUserLegalOrganization" resultType="java.lang.Long">
-        <bind name="now" value="@java.time.LocalDate@now().toString()" />
+        <bind name="now" value="@java.time.LocalDate@now()" />
         SELECT
           imr.source_id 
         FROM
@@ -323,7 +379,7 @@
           imr.source_id
     </select>
     <select id="selectUserRole" resultType="java.lang.Long">
-        <bind name="now" value="@java.time.LocalDate@now().toString()" />
+        <bind name="now" value="@java.time.LocalDate@now()" />
         SELECT
             imr.role_id
         FROM
@@ -339,6 +395,23 @@
                 imr.end_date_active is null
                 or imr.end_date_active >= #{now}
             )
+    </select>
+
+    <select id="selectRoleLabels" resultType="java.lang.String">
+        select
+            il.name
+        from iam_role ir
+        join hiam_label_rel ilr on (
+            ilr.data_type = 'ROLE'
+            and ilr.data_id = ir.id
+        )
+        join iam_label il on il.id = ilr.label_id
+        where ir.is_enabled = 1
+        and il.enabled_flag = 1
+        and ir.id in
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")" >
+            #{roleId}
+        </foreach>
     </select>
 
 </mapper>

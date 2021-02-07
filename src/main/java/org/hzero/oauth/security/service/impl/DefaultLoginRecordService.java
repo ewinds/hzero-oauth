@@ -107,16 +107,25 @@ public class DefaultLoginRecordService implements LoginRecordService {
     @Override
     public void recordLogoutUrl(String tokenValue, String logoutRedirectUrl) {
         String key = LOGOUT_REDIRECT_URL_PREFIX + tokenValue;
-        redisHelper.strSet(key, logoutRedirectUrl);
+        redisHelper.strSet(key, logoutRedirectUrl, 18, TimeUnit.HOURS);
+    }
+
+    @Override
+    public void removeLogoutUrl(String tokenValue) {
+        String key = LOGOUT_REDIRECT_URL_PREFIX + tokenValue;
+        redisHelper.delKey(key);
     }
 
     @Override
     public String getLogoutUrl(String tokenValue) {
         String key = LOGOUT_REDIRECT_URL_PREFIX + tokenValue;
-        String logoutUrl = redisHelper.strGet(key);
-        redisHelper.delKey(key);
+        return redisHelper.strGet(key);
+    }
 
-        return logoutUrl;
+    @Override
+    public boolean existsLogoutUrl(String tokenValue) {
+        String key = LOGOUT_REDIRECT_URL_PREFIX + tokenValue;
+        return redisHelper.hasKey(key);
     }
 
     @Override
